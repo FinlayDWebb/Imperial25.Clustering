@@ -1,5 +1,8 @@
 # Install Python dependencies if needed
 reticulate::py_install("tensorflow")
+reticulate::py_install("matplotlib")
+reticulate::py_install("numpy")
+reticulate::py_install("pandas")
 
 # Install and load required packages
 if (!require("rMIDAS", quietly = TRUE)) {
