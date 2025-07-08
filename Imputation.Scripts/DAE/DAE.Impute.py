@@ -4,6 +4,7 @@ MIDASpy Imputation Script
 Complete implementation for missing data imputation using MIDAS neural networks
 """
 
+import warnings
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -11,6 +12,17 @@ import MIDASpy as md
 from sklearn.preprocessing import MinMaxScaler
 import os
 import sys
+
+# Suppress TensorFlow and NumPy warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+
+# Check NumPy version
+if np.version.version >= '1.24.0':
+    print(f"Using NumPy {np.__version__} - applying compatibility patches")
+    np.bool = bool  # Patch for deprecated np.bool
+    np.object = object  # Patch for deprecated np.object
+    np.int = int  # Patch for deprecated np.int
 
 # Set random seed for reproducibility
 np.random.seed(42)
