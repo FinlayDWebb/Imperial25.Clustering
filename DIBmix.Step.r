@@ -13,3 +13,6 @@
 # preserves the ability to predict a target variable (like income, or age, etc.).
 
 # Load necessary libraries
+
+# Do this with DIBmix, and note we have to fix the bandwidths in DIBmix. But let us first find a good bandwidth that works.
+
