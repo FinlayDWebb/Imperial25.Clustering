@@ -1,0 +1,179 @@
+# Imputation Evaluation Script
+# Calculate RMSE, PFC, and Correlation for imputed datasets
+
+# Load required libraries
+library(dplyr)
+library(corrr)
+
+# Function to calculate RMSE for numerical variables
+calculate_rmse <- function(original, imputed) {
+  # Select only numerical columns
+  num_cols <- sapply(original, is.numeric)
+  
+  if (sum(num_cols) == 0) {
+    return(NA)
+  }
+  
+  original_num <- original[, num_cols, drop = FALSE]
+  imputed_num <- imputed[, num_cols, drop = FALSE]
+  
+  # Calculate RMSE for each numerical column
+  rmse_values <- sapply(names(original_num), function(col) {
+    sqrt(mean((original_num[[col]] - imputed_num[[col]])^2, na.rm = TRUE))
+  })
+  
+  # Return mean RMSE across all numerical columns
+  return(mean(rmse_values, na.rm = TRUE))
+}
+
+# Function to calculate PFC for categorical variables
+calculate_pfc <- function(original, imputed) {
+  # Select only categorical columns (factors and characters)
+  cat_cols <- sapply(original, function(x) is.factor(x) || is.character(x))
+  
+  if (sum(cat_cols) == 0) {
+    return(NA)
+  }
+  
+  original_cat <- original[, cat_cols, drop = FALSE]
+  imputed_cat <- imputed[, cat_cols, drop = FALSE]
+  
+  # Calculate PFC for each categorical column
+  pfc_values <- sapply(names(original_cat), function(col) {
+    # Count mismatches
+    mismatches <- sum(original_cat[[col]] != imputed_cat[[col]], na.rm = TRUE)
+    # Total valid comparisons
+    total <- sum(!is.na(original_cat[[col]]) & !is.na(imputed_cat[[col]]))
+    
+    if (total == 0) return(NA)
+    return(mismatches / total)
+  })
+  
+  # Return mean PFC across all categorical columns
+  return(mean(pfc_values, na.rm = TRUE))
+}
+
+# Function to calculate correlation for numerical variables
+calculate_correlation <- function(original, imputed) {
+  # Select only numerical columns
+  num_cols <- sapply(original, is.numeric)
+  
+  if (sum(num_cols) == 0) {
+    return(NA)
+  }
+  
+  original_num <- original[, num_cols, drop = FALSE]
+  imputed_num <- imputed[, num_cols, drop = FALSE]
+  
+  # Calculate correlation for each numerical column
+  cor_values <- sapply(names(original_num), function(col) {
+    cor(original_num[[col]], imputed_num[[col]], use = "complete.obs")
+  })
+  
+  # Return mean correlation across all numerical columns
+  return(mean(cor_values, na.rm = TRUE))
+}
+
+# Load original dataset
+print("Loading original dataset...")
+original_data <- read.csv("adult_sample_processed.csv")
+
+# Define imputed datasets
+imputed_files <- c(
+  "adult_sample_mcar_FAMD.csv",
+  "adult_sample_mnar_FAMD.csv",
+  "adult_sample_mcar_MICE.csv",
+  "adult_sample_mnar_MICE.csv",
+  "adult_sample_mcar_MIDAS.csv",
+  "adult_sample_mnar_MIDAS.csv",
+  "adult_sample_mcar_missForest.csv",
+  "adult_sample_mnar_missForest.csv"
+)
+
+# Initialize results dataframe
+results <- data.frame(
+  Dataset = character(),
+  Method = character(),
+  Missing_Pattern = character(),
+  RMSE = numeric(),
+  PFC = numeric(),
+  Correlation = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Process each imputed dataset
+print("Processing imputed datasets...")
+for (file in imputed_files) {
+  print(paste("Processing:", file))
+  
+  # Load imputed dataset
+  imputed_data <- read.csv(file)
+  
+  # Extract method and missing pattern from filename
+  file_parts <- strsplit(gsub(".csv", "", file), "_")[[1]]
+  missing_pattern <- toupper(file_parts[3])  # MCAR or MNAR
+  method <- file_parts[4]  # FAMD, MICE, MIDAS, missForest
+  
+  # Calculate metrics
+  rmse <- calculate_rmse(original_data, imputed_data)
+  pfc <- calculate_pfc(original_data, imputed_data)
+  correlation <- calculate_correlation(original_data, imputed_data)
+  
+  # Add to results
+  results <- rbind(results, data.frame(
+    Dataset = file,
+    Method = method,
+    Missing_Pattern = missing_pattern,
+    RMSE = rmse,
+    PFC = pfc,
+    Correlation = correlation
+  ))
+}
+
+# Display results
+print("=== IMPUTATION EVALUATION RESULTS ===")
+print(results)
+
+# Create summary by method
+print("\n=== SUMMARY BY METHOD ===")
+summary_by_method <- results %>%
+  group_by(Method) %>%
+  summarise(
+    Mean_RMSE = mean(RMSE, na.rm = TRUE),
+    Mean_PFC = mean(PFC, na.rm = TRUE),
+    Mean_Correlation = mean(Correlation, na.rm = TRUE),
+    .groups = 'drop'
+  )
+print(summary_by_method)
+
+# Create summary by missing pattern
+print("\n=== SUMMARY BY MISSING PATTERN ===")
+summary_by_pattern <- results %>%
+  group_by(Missing_Pattern) %>%
+  summarise(
+    Mean_RMSE = mean(RMSE, na.rm = TRUE),
+    Mean_PFC = mean(PFC, na.rm = TRUE),
+    Mean_Correlation = mean(Correlation, na.rm = TRUE),
+    .groups = 'drop'
+  )
+print(summary_by_pattern)
+
+# Save results to CSV
+write.csv(results, "imputation_evaluation_results.csv", row.names = FALSE)
+print("\nResults saved to: imputation_evaluation_results.csv")
+
+# Print interpretation guide
+print("\n=== INTERPRETATION GUIDE ===")
+print("RMSE (Root Mean Square Error):")
+print("  - Lower values = Better performance")
+print("  - Measures accuracy for numerical variables")
+print("")
+print("PFC (Proportion of Falsely Classified):")
+print("  - Lower values = Better performance")
+print("  - Measures accuracy for categorical variables")
+print("  - Range: 0 to 1 (0 = perfect, 1 = completely wrong)")
+print("")
+print("Correlation:")
+print("  - Higher values = Better performance")
+print("  - Measures linear relationship preservation")
+print("  - Range: -1 to 1 (1 = perfect positive correlation)")

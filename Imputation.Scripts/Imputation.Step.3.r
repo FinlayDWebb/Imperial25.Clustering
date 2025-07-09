@@ -48,7 +48,7 @@ cat("- MCAR:", sum(is.na(mcar_data)), "missing values\n")
 cat("- MNAR:", sum(is.na(mnar_data)), "missing values\n\n")
 
 # ----------------------------
-# 2. Revised Imputation Functions
+# 2. Imputation Functions
 # ----------------------------
 
 # ----- MICE Imputation -----
@@ -69,9 +69,9 @@ perform_mice_imputation <- function(data, dataset_name, m = 5, maxit = 10) {
       } else if (is.factor(data[[col]])) {
         unique_vals <- nlevels(data[[col]])
         if (unique_vals == 2) {
-          methods[col] <- "logreg"  # Logistic regression for binary
+          methods[col] <- "logreg"  # Logistic regression for binary (from Google)
         } else {
-          methods[col] <- "polyreg"  # Polytomous regression for categorical
+          methods[col] <- "polyreg"  # Polytomous regression for categorical (from Google)
         }
       }
     }
@@ -96,7 +96,7 @@ perform_mice_imputation <- function(data, dataset_name, m = 5, maxit = 10) {
   mice::complete(mice_result, 1)
 }
 
-# ----- FAMD Imputation (Revised) -----
+# ----- FAMD Imputation -----
 perform_famd_imputation <- function(data, dataset_name, ncp = 2) {
   cat("\n=== FAMD Imputation for", dataset_name, "===\n")
   
@@ -154,7 +154,9 @@ perform_missforest_imputation <- function(data, dataset_name, maxiter = 10, ntre
   forest_result$ximp
 }
 
-# ----- rMIDAS Imputation (Revised) -----
+### Ignore this, it doesn't work
+
+# ----- rMIDAS Imputation -----
 perform_rmidas_imputation <- function(data, dataset_name, training_epochs = 20, layer_structure = c(128, 128)) {
   cat("\n=== rMIDAS Imputation for", dataset_name, "===\n")
   
