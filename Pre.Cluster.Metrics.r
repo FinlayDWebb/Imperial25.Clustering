@@ -90,6 +90,16 @@ imputed_files <- c(
   "adult_sample_mnar_missForest.csv"
 )
 
+# Check which files exist before processing
+print("=== FILE EXISTENCE CHECK ===")
+for (file in imputed_files) {
+  if (file.exists(file)) {
+    print(paste("✓ Found:", file))
+  } else {
+    print(paste("✗ Missing:", file))
+  }
+}
+
 # Initialize results dataframe
 results <- data.frame(
   Dataset = character(),
@@ -103,36 +113,83 @@ results <- data.frame(
 
 # Process each imputed dataset
 print("Processing imputed datasets...")
-for (file in imputed_files) {
-  print(paste("Processing:", file))
+print(paste("Total files to process:", length(imputed_files)))
+
+for (i in 1:length(imputed_files)) {
+  file <- imputed_files[i]
+  print(paste("Processing file", i, "of", length(imputed_files), ":", file))
   
-  # Load imputed dataset
-  imputed_data <- read.csv(file)
+  # Check if file exists
+  if (!file.exists(file)) {
+    print(paste("WARNING: File not found:", file))
+    next
+  }
   
-  # Extract method and missing pattern from filename
-  file_parts <- strsplit(gsub(".csv", "", file), "_")[[1]]
-  missing_pattern <- toupper(file_parts[3])  # MCAR or MNAR
-  method <- file_parts[4]  # FAMD, MICE, MIDAS, missForest
-  
-  # Calculate metrics
-  rmse <- calculate_rmse(original_data, imputed_data)
-  pfc <- calculate_pfc(original_data, imputed_data)
-  correlation <- calculate_correlation(original_data, imputed_data)
-  
-  # Add to results
-  results <- rbind(results, data.frame(
-    Dataset = file,
-    Method = method,
-    Missing_Pattern = missing_pattern,
-    RMSE = rmse,
-    PFC = pfc,
-    Correlation = correlation
-  ))
+  # Load imputed dataset with error handling
+  tryCatch({
+    imputed_data <- read.csv(file)
+    print(paste("Successfully loaded:", file, "- Dimensions:", nrow(imputed_data), "x", ncol(imputed_data)))
+    
+    # Extract method and missing pattern from filename
+    file_parts <- strsplit(gsub(".csv", "", file), "_")[[1]]
+    missing_pattern <- toupper(file_parts[3])  # MCAR or MNAR
+    method <- file_parts[4]  # FAMD, MICE, MIDAS, missForest
+    
+    print(paste("Extracted - Method:", method, "Missing Pattern:", missing_pattern))
+    
+    # Calculate metrics
+    print("Calculating RMSE...")
+    rmse <- calculate_rmse(original_data, imputed_data)
+    print(paste("RMSE:", rmse))
+    
+    print("Calculating PFC...")
+    pfc <- calculate_pfc(original_data, imputed_data)
+    print(paste("PFC:", pfc))
+    
+    print("Calculating Correlation...")
+    correlation <- calculate_correlation(original_data, imputed_data)
+    print(paste("Correlation:", correlation))
+    
+    # Add to results
+    results <- rbind(results, data.frame(
+      Dataset = file,
+      Method = method,
+      Missing_Pattern = missing_pattern,
+      RMSE = rmse,
+      PFC = pfc,
+      Correlation = correlation
+    ))
+    
+    print(paste("Added results for:", file))
+    print("---")
+    
+  }, error = function(e) {
+    print(paste("ERROR processing file:", file))
+    print(paste("Error message:", e$message))
+    print("---")
+  })
 }
 
 # Display results
 print("=== IMPUTATION EVALUATION RESULTS ===")
+print(paste("Total datasets processed:", nrow(results)))
 print(results)
+
+# Show which files were processed vs expected
+print("\n=== PROCESSING SUMMARY ===")
+processed_files <- results$Dataset
+expected_files <- imputed_files
+missing_files <- setdiff(expected_files, processed_files)
+
+print(paste("Expected files:", length(expected_files)))
+print(paste("Successfully processed:", length(processed_files)))
+
+if (length(missing_files) > 0) {
+  print("Files that were NOT processed:")
+  for (file in missing_files) {
+    print(paste("  -", file))
+  }
+}
 
 # Create summary by method
 print("\n=== SUMMARY BY METHOD ===")
