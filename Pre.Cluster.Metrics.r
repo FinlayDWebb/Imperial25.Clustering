@@ -91,7 +91,7 @@ imputed_files <- c(
   "adult_mcar_midas_imp_1.csv",
   "adult_mcar_midas_imp_2.csv",
   "adult_mcar_midas_imp_3.csv",
-  "adult_mcar_midas_imp_4.csv"
+  "adult_mcar_midas_imp_4.csv",
   "adult_mcar_midas_imp_5.csv",
   "adult_mnar_midas_imp_1.csv",
   "adult_mnar_midas_imp_2.csv",
@@ -129,25 +129,41 @@ for (i in 1:length(imputed_files)) {
   file <- imputed_files[i]
   print(paste("Processing file", i, "of", length(imputed_files), ":", file))
   
-  # Check if file exists
   if (!file.exists(file)) {
     print(paste("WARNING: File not found:", file))
     next
   }
   
-  # Load imputed dataset with error handling
   tryCatch({
     imputed_data <- read.csv(file)
     print(paste("Successfully loaded:", file, "- Dimensions:", nrow(imputed_data), "x", ncol(imputed_data)))
     
-    # Extract method and missing pattern from filename
-    file_parts <- strsplit(gsub(".csv", "", file), "_")[[1]]
-    missing_pattern <- toupper(file_parts[3])  # MCAR or MNAR
-    method <- file_parts[4]  # FAMD, MICE, MIDAS, missForest
+      # FIXED FILENAME PARSING
+    file_base <- gsub(".csv", "", file)
+    file_parts <- strsplit(file_base, "_")[[1]]
+    
+    if ("sample" %in% file_parts) {
+      # Standard naming: adult_sample_<pattern>_<method>
+      missing_pattern <- toupper(file_parts[3])
+      method <- file_parts[4]
+    } else {
+      # MIDAS individual naming: adult_<pattern>_midas_imp_<num>
+      missing_pattern <- toupper(file_parts[2])
+      method <- "MIDAS"  # Explicitly set to MIDAS
+    }
+    
+   # Standardize method naming
+    method <- case_when(
+      tolower(method) == "midas" ~ "MIDAS",
+      tolower(method) == "mice" ~ "MICE",
+      tolower(method) == "famd" ~ "FAMD",
+      tolower(method) == "missforest" ~ "missForest",
+      TRUE ~ method
+    )
     
     print(paste("Extracted - Method:", method, "Missing Pattern:", missing_pattern))
-    
-    # Calculate metrics
+
+# Calculate metrics
     print("Calculating RMSE...")
     rmse <- calculate_rmse(original_data, imputed_data)
     print(paste("RMSE:", rmse))
@@ -160,7 +176,7 @@ for (i in 1:length(imputed_files)) {
     correlation <- calculate_correlation(original_data, imputed_data)
     print(paste("Correlation:", correlation))
     
-    # Add to results
+# Add to results
     results <- rbind(results, data.frame(
       Dataset = file,
       Method = method,
@@ -171,13 +187,12 @@ for (i in 1:length(imputed_files)) {
     ))
     
     print(paste("Added results for:", file))
-    print("---")
     
   }, error = function(e) {
     print(paste("ERROR processing file:", file))
     print(paste("Error message:", e$message))
-    print("---")
   })
+  print("---")
 }
 
 # Display results
@@ -229,7 +244,7 @@ print(summary_by_pattern)
 write.csv(results, "imputation_evaluation_results.csv", row.names = FALSE)
 print("\nResults saved to: imputation_evaluation_results.csv")
 
-# Print interpretation guide
+# FIXED Interpretation Guide
 print("\n=== INTERPRETATION GUIDE ===")
 print("RMSE (Root Mean Square Error):")
 print("  - Lower values = Better performance")
