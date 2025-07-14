@@ -1,6 +1,4 @@
-# Imputation Evaluation Script
-# Calculate RMSE, PFC, and Correlation for imputed datasets
-
+# Fixed Imputation Evaluation Script
 # Load required libraries
 library(dplyr)
 library(corrr)
@@ -77,6 +75,7 @@ calculate_correlation <- function(original, imputed) {
 # Load original dataset
 print("Loading original dataset...")
 original_data <- read.csv("adult_sample_processed.csv")
+print(paste("Original data dimensions:", nrow(original_data), "rows,", ncol(original_data), "columns"))
 
 # Define imputed datasets
 imputed_files <- c(
@@ -102,9 +101,11 @@ imputed_files <- c(
 
 # Check which files exist before processing
 print("=== FILE EXISTENCE CHECK ===")
+existing_files <- c()
 for (file in imputed_files) {
   if (file.exists(file)) {
     print(paste("✓ Found:", file))
+    existing_files <- c(existing_files, file)
   } else {
     print(paste("✗ Missing:", file))
   }
@@ -121,141 +122,125 @@ results <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Process each imputed dataset
-print("Processing imputed datasets...")
-print(paste("Total files to process:", length(imputed_files)))
+# Process each existing imputed dataset
+print(paste("Processing", length(existing_files), "existing files..."))
+success_count <- 0
 
-for (i in seq_along(imputed_files)) {
-  file <- imputed_files[i]
-  print(paste("Processing file", i, "of", length(imputed_files), ":", file))
-  
-  if (!file.exists(file)) {
-    print(paste("WARNING: File not found:", file))
-    next
-  }
+for (file in existing_files) {
+  print(paste("PROCESSING:", file))
   
   tryCatch({
+    # Load imputed dataset
     imputed_data <- read.csv(file)
-    print(paste("Successfully loaded:", file, "- Dimensions:", nrow(imputed_data), "x", ncol(imputed_data)))
+    print(paste("✓ Loaded. Dimensions:", nrow(imputed_data), "x", ncol(imputed_data)))
     
-      # FIXED FILENAME PARSING
-    file_base <- gsub(".csv", "", file)
-    file_parts <- strsplit(file_base, "_")[[1]]
-    
-    if ("sample" %in% file_parts) {
-      # Standard naming: adult_sample_<pattern>_<method>
-      missing_pattern <- toupper(file_parts[3])
-      method <- file_parts[4]
-    } else {
-      # MIDAS individual naming: adult_<pattern>_midas_imp_<num>
-      missing_pattern <- toupper(file_parts[2])
-      method <- "MIDAS"  # Explicitly set to MIDAS
+    # Verify dimensions match original data
+    if (nrow(imputed_data) != nrow(original_data) || ncol(imputed_data) != ncol(original_data)) {
+      stop(paste("Dimension mismatch! Original:", 
+                 nrow(original_data), "x", ncol(original_data),
+                 "Imputed:", nrow(imputed_data), "x", ncol(imputed_data)))
     }
     
-   # Standardize method naming
+    # ROBUST FILENAME PARSING
+    file_base <- basename(file)
+    if (grepl("sample", file_base)) {
+      # adult_sample_<pattern>_<method>.csv
+      parts <- unlist(strsplit(file_base, "_"))
+      missing_pattern <- toupper(parts[3])
+      method <- tools::file_path_sans_ext(parts[4])
+    } else if (grepl("midas_imp", file_base)) {
+      # adult_<pattern>_midas_imp_<num>.csv
+      parts <- unlist(strsplit(file_base, "_"))
+      missing_pattern <- toupper(parts[2])
+      method <- "MIDAS"
+    } else {
+      stop("Unknown filename format")
+    }
+    
+    # STANDARDIZE METHOD NAMES
     method <- case_when(
-      tolower(method) == "midas" ~ "MIDAS",
-      tolower(method) == "mice" ~ "MICE",
-      tolower(method) == "famd" ~ "FAMD",
-      tolower(method) == "missforest" ~ "missForest",
+      tolower(method) %in% c("midas") ~ "MIDAS",
+      tolower(method) %in% c("mice") ~ "MICE",
+      tolower(method) %in% c("famd") ~ "FAMD",
+      tolower(method) %in% c("missforest") ~ "missForest",
       TRUE ~ method
     )
+    print(paste("Method:", method, "| Pattern:", missing_pattern))
     
-    print(paste("Extracted - Method:", method, "Missing Pattern:", missing_pattern))
-
-# Calculate metrics
-    print("Calculating RMSE...")
-    rmse <- calculate_rmse(original_data, imputed_data)
-    print(paste("RMSE:", rmse))
+    # SAFELY CALCULATE METRICS
+    rmse <- tryCatch(calculate_rmse(original_data, imputed_data),
+                     error = function(e) { print(paste("RMSE Error:", e$message)); NA })
+    pfc <- tryCatch(calculate_pfc(original_data, imputed_data),
+                    error = function(e) { print(paste("PFC Error:", e$message)); NA })
+    correlation <- tryCatch(calculate_correlation(original_data, imputed_data),
+                            error = function(e) { print(paste("Correlation Error:", e$message)); NA })
     
-    print("Calculating PFC...")
-    pfc <- calculate_pfc(original_data, imputed_data)
-    print(paste("PFC:", pfc))
-    
-    print("Calculating Correlation...")
-    correlation <- calculate_correlation(original_data, imputed_data)
-    print(paste("Correlation:", correlation))
-    
-# Add to results
+    # Add to results
     results <- rbind(results, data.frame(
       Dataset = file,
       Method = method,
       Missing_Pattern = missing_pattern,
-      RMSE = rmse,
-      PFC = pfc,
-      Correlation = correlation
+      RMSE = ifelse(is.numeric(rmse), rmse, NA),
+      PFC = ifelse(is.numeric(pfc), pfc, NA),
+      Correlation = ifelse(is.numeric(correlation), correlation, NA)
     ))
     
-    print(paste("Added results for:", file))
+    success_count <- success_count + 1
+    print(paste("✓ Added. Success:", success_count, "/", length(existing_files)))
     
   }, error = function(e) {
-    print(paste("ERROR processing file:", file))
-    print(paste("Error message:", e$message))
+    print(paste("⚠ PROCESSING FAILED:", e$message))
   })
-  print("---")
+  print("────────────────────────")
 }
 
-# Display results
-print("=== IMPUTATION EVALUATION RESULTS ===")
-print(paste("Total datasets processed:", nrow(results)))
+# SAVE RESULTS
+if (nrow(results) > 0) {
+  write.csv(results, "imputation_evaluation_results_FIXED.csv", row.names = FALSE)
+  print(paste("✅ Saved results for", nrow(results), "files"))
+} else {
+  print("💥 No results to save!")
+}
+
+# Print final results
+print("FINAL RESULTS:")
 print(results)
 
-# Show which files were processed vs expected
-print("\n=== PROCESSING SUMMARY ===")
-processed_files <- results$Dataset
-expected_files <- imputed_files
-missing_files <- setdiff(expected_files, processed_files)
-
-print(paste("Expected files:", length(expected_files)))
-print(paste("Successfully processed:", length(processed_files)))
-
-if (length(missing_files) > 0) {
-  print("Files that were NOT processed:")
-  for (file in missing_files) {
-    print(paste("  -", file))
-  }
+# Print summary
+if (nrow(results) > 0) {
+  print("=== SUMMARY BY METHOD ===")
+  summary_by_method <- results %>%
+    group_by(Method) %>%
+    summarise(
+      Mean_RMSE = mean(RMSE, na.rm = TRUE),
+      Mean_PFC = mean(PFC, na.rm = TRUE),
+      Mean_Correlation = mean(Correlation, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  print(summary_by_method)
+  
+  print("=== SUMMARY BY MISSING PATTERN ===")
+  summary_by_pattern <- results %>%
+    group_by(Missing_Pattern) %>%
+    summarise(
+      Mean_RMSE = mean(RMSE, na.rm = TRUE),
+      Mean_PFC = mean(PFC, na.rm = TRUE),
+      Mean_Correlation = mean(Correlation, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  print(summary_by_pattern)
 }
 
-# Create summary by method
-print("\n=== SUMMARY BY METHOD ===")
-summary_by_method <- results %>%
-  group_by(Method) %>%
-  summarise(
-    Mean_RMSE = mean(RMSE, na.rm = TRUE),
-    Mean_PFC = mean(PFC, na.rm = TRUE),
-    Mean_Correlation = mean(Correlation, na.rm = TRUE),
-    .groups = 'drop'
-  )
-print(summary_by_method)
-
-# Create summary by missing pattern
-print("\n=== SUMMARY BY MISSING PATTERN ===")
-summary_by_pattern <- results %>%
-  group_by(Missing_Pattern) %>%
-  summarise(
-    Mean_RMSE = mean(RMSE, na.rm = TRUE),
-    Mean_PFC = mean(PFC, na.rm = TRUE),
-    Mean_Correlation = mean(Correlation, na.rm = TRUE),
-    .groups = 'drop'
-  )
-print(summary_by_pattern)
-
-# Save results to CSV
-write.csv(results, "imputation_evaluation_results.csv", row.names = FALSE)
-print("\nResults saved to: imputation_evaluation_results.csv")
-
-# FIXED Interpretation Guide
-print("\n=== INTERPRETATION GUIDE ===")
-print("RMSE (Root Mean Square Error):")
-print("  - Lower values = Better performance")
-print("  - Measures accuracy for numerical variables")
-print("")
-print("PFC (Proportion of Falsely Classified):")
-print("  - Lower values = Better performance")
-print("  - Measures accuracy for categorical variables")
-print("  - Range: 0 to 1 (0 = perfect, 1 = completely wrong)")
-print("")
-print("Correlation:")
-print("  - Higher values = Better performance")
-print("  - Measures linear relationship preservation")
-print("  - Range: -1 to 1 (1 = perfect positive correlation)")
+# Print interpretation guide
+cat("\n=== INTERPRETATION GUIDE ===\n")
+cat("RMSE (Root Mean Square Error):\n")
+cat("  - Lower values = Better performance\n")
+cat("  - Measures accuracy for numerical variables\n\n")
+cat("PFC (Proportion of Falsely Classified):\n")
+cat("  - Lower values = Better performance\n")
+cat("  - Measures accuracy for categorical variables\n")
+cat("  - Range: 0 to 1 (0 = perfect, 1 = completely wrong)\n\n")
+cat("Correlation:\n")
+cat("  - Higher values = Better performance\n")
+cat("  - Measures linear relationship preservation\n")
+cat("  - Range: -1 to 1 (1 = perfect positive correlation)\n")
