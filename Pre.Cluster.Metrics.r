@@ -125,7 +125,7 @@ results <- data.frame(
 print("Processing imputed datasets...")
 print(paste("Total files to process:", length(imputed_files)))
 
-for (i in 1:length(imputed_files)) {
+for (i in seq_along(imputed_files)) {
   file <- imputed_files[i]
   print(paste("Processing file", i, "of", length(imputed_files), ":", file))
   
