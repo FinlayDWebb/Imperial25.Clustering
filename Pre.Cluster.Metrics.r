@@ -87,7 +87,17 @@ imputed_files <- c(
   "adult_sample_mcar_MIDAS.csv",
   "adult_sample_mnar_MIDAS.csv",
   "adult_sample_mcar_missForest.csv",
-  "adult_sample_mnar_missForest.csv"
+  "adult_sample_mnar_missForest.csv",
+  "adult_mcar_midas_imp_1.csv",
+  "adult_mcar_midas_imp_2.csv",
+  "adult_mcar_midas_imp_3.csv",
+  "adult_mcar_midas_imp_4.csv"
+  "adult_mcar_midas_imp_5.csv",
+  "adult_mnar_midas_imp_1.csv",
+  "adult_mnar_midas_imp_2.csv",
+  "adult_mnar_midas_imp_3.csv",
+  "adult_mnar_midas_imp_4.csv",
+  "adult_mnar_midas_imp_5.csv"
 )
 
 # Check which files exist before processing
