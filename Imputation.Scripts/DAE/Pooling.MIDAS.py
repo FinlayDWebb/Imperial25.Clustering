@@ -111,3 +111,4 @@ if mcar_pooled is not None and mnar_pooled is not None:
     print(f"MCAR pooled shape: {mcar_pooled.shape}")
     print(f"MNAR pooled shape: {mnar_pooled.shape}")
     print("✓ Datasets pooled by averaging imputed values")
+    
