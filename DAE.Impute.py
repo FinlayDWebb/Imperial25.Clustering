@@ -4,6 +4,13 @@ FIXED MIDASpy Imputation Script
 With categorical reconstruction and scaling fixes
 """
 
+### Changes:
+# 1. Fixed the convert back to categorical step, from one-hot back to original
+# 2. Deeper training, more epochs, more layers
+# 3. Normalised the continous entries into the model
+# 4. Better error handling
+# This has resulted in an increase in accuracy from PFC 1, to PFC ~0.20. Huge difference.
+
 import warnings
 import numpy as np
 import pandas as pd
