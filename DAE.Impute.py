@@ -101,8 +101,13 @@ def preprocess_data(data, categorical_vars):
     # Replace NaN values (required by MIDAS)
     na_loc = data_processed.isnull()
     data_processed[na_loc] = np.nan
+
+    # Normalize continuous variables to [0,1]
+    continuous_vars = [col for col in data.columns if col not in categorical_vars]
+    scaler = MinMaxScaler()
+    data_copy[continuous_vars] = scaler.fit_transform(data_copy[continuous_vars])
     
-    return data_processed, cat_cols_list
+    return data_processed, cat_cols_list, scaler, continuous_vars
 
 def train_midas_model(data, cat_cols_list, layer_structure=[256, 256], 
                      training_epochs=50, input_drop=0.75, seed=42):
@@ -164,35 +169,48 @@ def generate_imputations(imputer, m=5):
 
 def convert_categorical_back(imputations, cat_cols_list, categorical_vars):
     """
-    Convert one-hot encoded categorical variables back to original format
-    
-    Parameters:
-    -----------
-    imputations : list
-        List of imputed datasets
-    cat_cols_list : list
-        List of categorical column groups
-    categorical_vars : list
-        Original categorical variable names
-        
-    Returns:
-    --------
-    list: List of imputed datasets with categorical variables restored
+    PROPERLY convert one-hot encoded variables back to original categorical format
     """
-    # Get flat list of all one-hot encoded columns
-    flat_cats = [cat for variable in cat_cols_list for cat in variable]
+    # Get mapping from one-hot columns to original categories
+    category_mapping = {}
+    for var, cols in zip(categorical_vars, cat_cols_list):
+        for col in cols:
+            # Extract category name from column name (e.g., "workclass_Private" -> "Private")
+            category = col.split("_", 1)[1]  
+            category_mapping[col] = (var, category)
     
     for i in range(len(imputations)):
-        # Find the category with highest probability for each categorical variable
-        tmp_cat = [imputations[i][x].idxmax(axis=1) for x in cat_cols_list]
+        # Create DataFrame for reconstructed categoricals
+        cat_data = pd.DataFrame()
         
-        # Create DataFrame with original categorical variable names
-        cat_df = pd.DataFrame({categorical_vars[j]: tmp_cat[j] for j in range(len(categorical_vars))})
-        
-        # Add categorical variables back and remove one-hot encoded columns
-        imputations[i] = pd.concat([imputations[i], cat_df], axis=1).drop(flat_cats, axis=1)
+        for orig_var in categorical_vars:
+            # Get all columns for this categorical variable
+            var_cols = [col for col in imputations[i].columns 
+                       if col in category_mapping and category_mapping[col][0] == orig_var]
+            
+            if var_cols:
+                # Find most probable category
+                cat_series = imputations[i][var_cols].idxmax(axis=1)
+                # Map to original category names
+                cat_series = cat_series.map(lambda x: category_mapping[x][1])
+                cat_data[orig_var] = cat_series
+                
+        # Remove one-hot columns and add reconstructed categoricals
+        flat_cats = [col for cols in cat_cols_list for col in cols]
+        imputations[i] = imputations[i].drop(flat_cats, axis=1)
+        imputations[i] = pd.concat([imputations[i], cat_data], axis=1)
     
     return imputations
+
+def reverse_scaling(imputations, scaler, continuous_vars):
+    for i in range(len(imputations)):
+        imputations[i][continuous_vars] = scaler.inverse_transform(
+            imputations[i][continuous_vars])
+    return imputations
+
+# In impute_dataset():
+imputations = convert_categorical_back(imputations, cat_cols_list, categorical_vars)
+imputations = reverse_scaling(imputations, scaler, continuous_vars)  # Add this
 
 def impute_dataset(input_file, output_prefix, m=5, layer_structure=[256, 256], 
                   training_epochs=50, categorical_vars=None, max_categories=20):
@@ -313,13 +331,14 @@ def main():
     for dataset in datasets:
         if os.path.exists(dataset['file']):
             imputations = impute_dataset(
+                # Using deeper network and more epochs
                 input_file=dataset['file'],
                 output_prefix=dataset['output_prefix'],
-                m=5,  # Number of imputations
-                layer_structure=[128, 64],  # Neural network structure
-                training_epochs=50,
+                m=5,
+                layer_structure=[256, 256, 128],  # Increased capacity
+                training_epochs=100,               # More epochs
                 categorical_vars=dataset['categorical_vars']
-            )
+                )
         else:
             print(f"File not found: {dataset['file']}")
     
