@@ -256,7 +256,7 @@ run_imputation_pipeline <- function(data_path,
         write_csv(mar_data, midas_input)
         
         # Call Python script (assumes it's in same directory)
-        system(sprintf("python Testing.DAE.py %s %s", midas_input, midas_output_prefix))
+        system(sprintf("python MIDAS.Pipe.py %s %s", midas_input, midas_output_prefix))
 
         # Process and pool MIDAS imputations
         imputed_data <- process_midas_imputations(
