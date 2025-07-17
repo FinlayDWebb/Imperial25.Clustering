@@ -69,9 +69,9 @@ perform_mice_imputation <- function(data, dataset_name, m = 5, maxit = 10) {
       } else if (is.factor(data[[col]])) {
         unique_vals <- nlevels(data[[col]])
         if (unique_vals == 2) {
-          methods[col] <- "logreg"  # Logistic regression for binary (from Google)
+          methods[col] <- "logreg"  # Logistic regression for binary
         } else {
-          methods[col] <- "polyreg"  # Polytomous regression for categorical (from Google)
+          methods[col] <- "polyreg"  # Polytomous regression for categorical
         }
       }
     }
@@ -82,7 +82,7 @@ perform_mice_imputation <- function(data, dataset_name, m = 5, maxit = 10) {
   cat("Imputation methods:\n")
   print(methods[methods != ""])
   
-  # Perform MICE
+  # Perform MICE with multiple imputations
   mice_result <- mice::mice(
     data = data,
     m = m,
@@ -92,39 +92,48 @@ perform_mice_imputation <- function(data, dataset_name, m = 5, maxit = 10) {
     seed = 42
   )
   
-  # Return first imputation
-  mice::complete(mice_result, 1)
-}
-
-# ----- FAMD Imputation -----
-perform_famd_imputation <- function(data, dataset_name, ncp = 2) {
-  cat("\n=== FAMD Imputation for", dataset_name, "===\n")
+  # Pool the results - this is the key addition
+  cat("\nPooling", m, "imputations...\n")
   
-  # Ensure factors are properly set
-  data <- data %>% mutate(across(where(is.character), as.factor))
+  # Extract all completed datasets
+  completed_datasets <- vector("list", m)
+  for (i in 1:m) {
+    completed_datasets[[i]] <- mice::complete(mice_result, i)
+  }
   
-  # Show data types
-  cat("Data types:\n")
-  print(sapply(data, class))
+  # Pool continuous variables using mean
+  # Pool categorical variables using mode
+  pooled_data <- data.frame(matrix(nrow = nrow(data), ncol = ncol(data)))
+  names(pooled_data) <- names(data)
   
-  # Perform FAMD imputation (single imputation)
-  cat("Performing FAMD imputation (ncp =", ncp, ")...\n")
-  imputed_data <- missMDA::imputeFAMD(
-    X = data,
-    ncp = ncp,
-    method = "Regularized",
-    seed = 42
-  )$completeObs
-  
-  # Convert to data frame with proper types
-  imputed_df <- as.data.frame(imputed_data)
-  for (col in names(imputed_df)) {
-    if (is.factor(data[[col]])) {
-      imputed_df[[col]] <- as.factor(imputed_df[[col]])
+  for (col in names(data)) {
+    if (is.numeric(data[[col]])) {
+      # For continuous variables: average across imputations
+      values_matrix <- sapply(completed_datasets, function(df) df[[col]])
+      pooled_data[[col]] <- rowMeans(values_matrix, na.rm = TRUE)
+    } else if (is.factor(data[[col]])) {
+      # For categorical variables: use mode (most frequent) across imputations
+      pooled_values <- character(nrow(data))
+      for (row in 1:nrow(data)) {
+        if (is.na(data[[col]][row])) {
+          # Get values from all imputations for this missing cell
+          imputed_values <- sapply(completed_datasets, function(df) as.character(df[[col]][row]))
+          # Find mode (most frequent value)
+          mode_value <- names(sort(table(imputed_values), decreasing = TRUE))[1]
+          pooled_values[row] <- mode_value
+        } else {
+          # Keep original observed value
+          pooled_values[row] <- as.character(data[[col]][row])
+        }
+      }
+      pooled_data[[col]] <- factor(pooled_values, levels = levels(data[[col]]))
     }
   }
   
-  return(imputed_df)
+  cat("Pooling complete. Missing values after pooling:", sum(is.na(pooled_data)), "\n")
+  
+  # Return pooled dataset
+  return(pooled_data)
 }
 
 # ----- missForest Imputation (Revised) -----
