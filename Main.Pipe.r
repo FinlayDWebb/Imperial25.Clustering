@@ -241,7 +241,10 @@ run_imputation_pipeline <- function(data_path,
   
   for (rate in missing_rates) {
     # 2. Introduce MCAR missingness
-    mar_data <- insert_mar(clean_data, rate)
+    mar_data <- insert_mar(clean_data, 
+                           target_cols = names(clean_data), # All columns
+                           predictor_cols = NULL,         # Random predictors
+                           missing_rate = rate)
     
     for (method in methods) {
       # 3. Impute missing values
