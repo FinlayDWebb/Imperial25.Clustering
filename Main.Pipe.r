@@ -17,20 +17,20 @@ library(tidyr)
 # ----------------------------
 
 preprocess_data <- function(file_path) {
-  #' Cleans and prepares raw data for analysis
+  #' Cleans and prepares raw data for analysis (more robust version)
   #'
   #' @param file_path Path to raw data file
   #' @return Cleaned dataframe with proper data types
   
-  # Read data with automatic column type detection
-  data <- read_csv(file_path, show_col_types = FALSE)
+  # Read data treating "?" as missing from the start
+  data <- read_csv(file_path, 
+                   na = c("", "NA", "?"),  # Handle "?" during reading
+                   show_col_types = FALSE)
   
   # Basic cleaning operations
   clean_data <- data %>%
-    # Remove leading/trailing whitespace
+    # Remove leading/trailing whitespace from character columns
     mutate(across(where(is.character), trimws)) %>%
-    # Convert placeholder strings to NA
-    mutate(across(everything(), ~na_if(., "?"))) %>%
     # Convert character columns to factors
     mutate(across(where(is.character), as.factor))
   
@@ -319,7 +319,7 @@ run_imputation_pipeline <- function(data_path,
 
 # Example usage
 results <- run_imputation_pipeline(
-  data_path = "your_dataset.csv",
+  data_path = "adult_sample_processed.csv",
   missing_rates = c(0.05, 0.10, 0.15),
   methods = c("MICE", "FAMD", "missForest", "MIDAS")
 )
