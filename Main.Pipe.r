@@ -199,177 +199,119 @@ impute_famd <- function(data) {
 }
 
 impute_missforest <- function(data) {
-  #' Random forest-based imputation with robust error handling
+  #' Random forest-based imputation with simplified, robust handling
   #' 
   #' @param data Dataframe with missing values
   #' @return Imputed dataframe
   
   set.seed(42)
   
-  # Store original factor levels and column types
+  # Store original factor levels for restoration
   factor_levels <- lapply(data, function(x) if(is.factor(x)) levels(x) else NULL)
-  original_types <- sapply(data, class)
   
   tryCatch({
-    # Create a clean copy of the data
-    clean_data <- data
+    # Convert to data frame (missForest requires data frame)
+    data_df <- as.data.frame(data)
     
-    # Fix factor columns more robustly
-    for (col in names(clean_data)) {
-      if (is.factor(clean_data[[col]])) {
-        # Remove unused levels
-        clean_data[[col]] <- droplevels(clean_data[[col]])
-        
-        # Ensure at least 2 levels exist (missForest requirement)
-        if (length(levels(clean_data[[col]])) < 2) {
-          cat("Warning: Factor column", col, "has fewer than 2 levels. Converting to character.\n")
-          clean_data[[col]] <- as.character(clean_data[[col]])
-        }
-        
-        # Check for any remaining issues with factor levels
-        if (any(is.na(levels(clean_data[[col]])))) {
-          cat("Warning: Factor column", col, "has NA levels. Cleaning...\n")
-          clean_data[[col]] <- factor(clean_data[[col]], exclude = NULL)
-        }
-      }
-    }
+    # Simple, clean data preparation - no aggressive conversions
+    # Just ensure characters are factors (they should already be from preprocessing)
+    data_df <- data_df %>% mutate(across(where(is.character), as.factor))
     
-    # Additional data validation
-    # Check for columns that are entirely missing
-    entirely_missing <- sapply(clean_data, function(x) all(is.na(x)))
-    if (any(entirely_missing)) {
-      cat("Warning: Removing entirely missing columns:", names(clean_data)[entirely_missing], "\n")
-      clean_data <- clean_data[, !entirely_missing, drop = FALSE]
-    }
-    
-    # Check for constant columns (no variation)
-    constant_cols <- sapply(clean_data, function(x) {
-      if (is.numeric(x)) {
-        non_na_vals <- x[!is.na(x)]
-        if (length(non_na_vals) <= 1) return(TRUE)
-        return(var(non_na_vals, na.rm = TRUE) == 0)
-      } else if (is.factor(x) || is.character(x)) {
-        non_na_vals <- x[!is.na(x)]
-        if (length(non_na_vals) <= 1) return(TRUE)
-        return(length(unique(non_na_vals)) == 1)
-      }
-      return(FALSE)
-    })
-    
-    if (any(constant_cols)) {
-      cat("Warning: Found constant columns:", names(clean_data)[constant_cols], "\n")
-      # For constant columns, we can't impute meaningfully, so we'll exclude them
-      clean_data <- clean_data[, !constant_cols, drop = FALSE]
-    }
-    
-    # Ensure we still have data to work with
-    if (ncol(clean_data) == 0) {
-      cat("Error: No valid columns remaining after cleaning\n")
+    # Basic validation
+    if (nrow(data_df) == 0 || ncol(data_df) == 0) {
+      cat("Error: Empty dataset\n")
       return(NULL)
     }
     
-    # Additional check: ensure factors have valid structure
-    for (col in names(clean_data)) {
-      if (is.factor(clean_data[[col]])) {
-        # Try to reconstruct the factor cleanly
-        temp_vals <- as.character(clean_data[[col]])
-        clean_data[[col]] <- factor(temp_vals, exclude = NULL)
-      }
+    # Check for entirely missing columns
+    entirely_missing_cols <- sapply(data_df, function(x) all(is.na(x)))
+    if (any(entirely_missing_cols)) {
+      cat("Warning: Removing entirely missing columns:", names(data_df)[entirely_missing_cols], "\n")
+      data_df <- data_df[, !entirely_missing_cols, drop = FALSE]
     }
     
-    # Run missForest with additional parameters for robustness
-    result <- missForest(clean_data, 
-                        verbose = FALSE,
-                        maxiter = 5,  # Reduce iterations to avoid convergence issues
-                        ntree = 50)   # Reduce trees for faster computation
+    # Check for entirely missing rows
+    entirely_missing_rows <- apply(data_df, 1, function(x) all(is.na(x)))
+    if (any(entirely_missing_rows)) {
+      cat("Warning: Removing entirely missing rows:", sum(entirely_missing_rows), "\n")
+      data_df <- data_df[!entirely_missing_rows, , drop = FALSE]
+    }
     
-    imputed_data <- result$ximp
+    # Show data types for debugging
+    cat("Data types going into missForest:\n")
+    for (col in names(data_df)) {
+      cat(sprintf("  %s: %s", col, class(data_df[[col]])[1]))
+      if (is.factor(data_df[[col]])) {
+        cat(sprintf(" (%d levels)", nlevels(data_df[[col]])))
+      }
+      cat("\n")
+    }
     
-    # Restore original structure for columns that were in original data
+    # Perform missForest with conservative settings
+    cat("Performing missForest...\n")
+    forest_result <- missForest::missForest(
+      xmis = data_df,
+      maxiter = 10,
+      ntree = 100,
+      verbose = FALSE
+    )
+    
+    # Get imputed data
+    imputed_data <- forest_result$ximp
+    
+    # Restore original factor levels if needed
     for (col in names(data)) {
-      if (col %in% names(imputed_data)) {
-        if (is.factor(data[[col]]) && !is.null(factor_levels[[col]])) {
-          # Restore original factor levels
+      if (is.factor(data[[col]]) && !is.null(factor_levels[[col]])) {
+        if (col %in% names(imputed_data)) {
           imputed_data[[col]] <- factor(imputed_data[[col]], levels = factor_levels[[col]])
         }
-      } else {
-        # Column was removed during cleaning - restore with original values
-        cat("Warning: Column", col, "was removed during cleaning. Restoring original values.\n")
-        imputed_data[[col]] <- data[[col]]
       }
     }
     
-    # Ensure column order matches original
-    imputed_data <- imputed_data[, names(data), drop = FALSE]
+    # Handle dimension mismatch if rows were removed
+    if (nrow(imputed_data) != nrow(data)) {
+      cat("Warning: Row count mismatch. Creating result with original dimensions.\n")
+      result <- data
+      if (exists("entirely_missing_rows")) {
+        result[!entirely_missing_rows, names(imputed_data)] <- imputed_data
+      }
+      return(result)
+    }
     
     return(imputed_data)
     
   }, error = function(e) {
     cat("missForest imputation failed with error:", e$message, "\n")
     
-    # Provide more detailed diagnostics
-    cat("Data diagnostics:\n")
-    cat("- Dimensions:", dim(data), "\n")
-    cat("- Column types:", paste(sapply(data, class), collapse = ", "), "\n")
-    cat("- Missing proportions by column:\n")
-    missing_props <- sapply(data, function(x) mean(is.na(x)))
-    for (i in seq_along(missing_props)) {
-      cat(sprintf("  %s: %.2f%%\n", names(missing_props)[i], missing_props[i] * 100))
-    }
+    # Detailed diagnostics
+    cat("Detailed diagnostics:\n")
+    cat("- Data class:", class(data), "\n")
+    cat("- Data dimensions:", dim(data), "\n")
     
-    # Check for problematic factor levels
-    factor_cols <- names(data)[sapply(data, is.factor)]
-    if (length(factor_cols) > 0) {
-      cat("- Factor column diagnostics:\n")
-      for (col in factor_cols) {
-        levels_info <- levels(data[[col]])
-        cat(sprintf("  %s: %d levels, %d non-missing values\n", 
-                   col, length(levels_info), sum(!is.na(data[[col]]))))
+    # Check each column
+    for (col in names(data)) {
+      col_data <- data[[col]]
+      cat(sprintf("- %s: class=%s", col, paste(class(col_data), collapse=",")))
+      
+      if (is.factor(col_data)) {
+        cat(sprintf(", levels=%d, na_count=%d", nlevels(col_data), sum(is.na(col_data))))
+        
+        # Check for problematic factor levels
+        levels_char <- levels(col_data)
+        if (any(is.na(levels_char)) || any(levels_char == "")) {
+          cat(" [PROBLEMATIC LEVELS DETECTED]")
+        }
+      } else if (is.numeric(col_data)) {
+        cat(sprintf(", na_count=%d, range=[%.2f,%.2f]", 
+                   sum(is.na(col_data)), 
+                   min(col_data, na.rm=TRUE), 
+                   max(col_data, na.rm=TRUE)))
       }
+      cat("\n")
     }
     
     return(NULL)
   })
-}
-
-# ----------------------------
-# 4. EVALUATION METRICS
-# ----------------------------
-
-calculate_rmse <- function(original, imputed) {
-  #' Calculates RMSE for numerical columns
-  #' 
-  #' @param original Complete original dataframe
-  #' @param imputed Imputed dataframe
-  #' @return Mean RMSE across numerical columns
-  
-  num_cols <- names(original)[sapply(original, is.numeric)]
-  
-  if (length(num_cols) == 0) return(NA)
-  
-  rmse_vals <- sapply(num_cols, function(col) {
-    sqrt(mean((original[[col]] - imputed[[col]])^2, na.rm = TRUE))
-  })
-  
-  mean(rmse_vals, na.rm = TRUE)
-}
-
-calculate_pfc <- function(original, imputed) {
-  #' Calculates PFC for categorical columns
-  #' 
-  #' @param original Complete original dataframe
-  #' @param imputed Imputed dataframe
-  #' @return Mean PFC across categorical columns
-  
-  cat_cols <- names(original)[sapply(original, is.factor)]
-  
-  if (length(cat_cols) == 0) return(NA)
-  
-  pfc_vals <- sapply(cat_cols, function(col) {
-    mean(original[[col]] != imputed[[col]], na.rm = TRUE)
-  })
-  
-  mean(pfc_vals, na.rm = TRUE)
 }
 
 # ----------------------------
