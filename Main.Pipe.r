@@ -75,27 +75,53 @@ insert_mar <- function(data, target_cols, predictor_cols, missing_rate) {
     
     # Convert predictor to numeric representation
     if (is.numeric(data_mar[[predictor]])) {
-      pred_vals <- scale(data_mar[[predictor]])
+      pred_vals <- data_mar[[predictor]]
+      # Check if column has variance before scaling
+      if (var(pred_vals, na.rm = TRUE) > 0) {
+        pred_vals <- as.numeric(scale(pred_vals))
+      } else {
+        # Handle constant columns - use small random variation
+        pred_vals <- rep(0, length(pred_vals))
+      }
     } else {
       # Convert factors/characters to numeric embeddings
       pred_vals <- as.numeric(factor(data_mar[[predictor]]))
-      pred_vals <- scale(pred_vals)
+      # Check if column has variance before scaling
+      if (var(pred_vals, na.rm = TRUE) > 0) {
+        pred_vals <- as.numeric(scale(pred_vals))
+      } else {
+        # Handle constant columns - use small random variation
+        pred_vals <- rep(0, length(pred_vals))
+      }
     }
     
-    # Handle constant columns
-    if (all(is.na(pred_vals))) { pred_vals <- matrix(0, nrow = nrow(data)) }
+    # Ensure no NaN or NA values in pred_vals
+    pred_vals[is.na(pred_vals) | is.nan(pred_vals)] <- 0
     
     # Create missingness mechanism: logit(p) = intercept + beta * predictor
     beta <- 2  # Fixed effect size
     log_odds <- beta * pred_vals
     p_missing <- 1 / (1 + exp(-log_odds))
     
+    # Handle any remaining NaN/NA values in probabilities
+    p_missing[is.na(p_missing) | is.nan(p_missing)] <- 0.5
+    
     # Adjust probabilities to hit target missing rate
-    p_scale <- missing_rate / mean(p_missing, na.rm = TRUE)
-    p_missing <- pmin(p_missing * p_scale, 0.95)  # Cap at 95% to avoid all-missing
+    current_mean <- mean(p_missing, na.rm = TRUE)
+    if (current_mean > 0) {
+      p_scale <- missing_rate / current_mean
+      p_missing <- pmin(p_missing * p_scale, 0.95)  # Cap at 95% to avoid all-missing
+    } else {
+      # If all probabilities are 0, set uniform probability
+      p_missing <- rep(missing_rate, length(p_missing))
+    }
     
     # Introduce missing values
     missing_mask <- runif(nrow(data_mar)) < p_missing
+    
+    # Final safety check - ensure missing_mask has no NA values
+    missing_mask[is.na(missing_mask)] <- FALSE
+    
     data_mar[missing_mask, target_col] <- NA
   }
   
