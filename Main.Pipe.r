@@ -143,8 +143,31 @@ impute_mice <- function(data) {
   #' @return Imputed dataframe
   
   set.seed(42)
-  imp <- mice(data, m = 1, maxit = 10, method = "pmm")
-  complete(imp)
+  # Create predictor matrix - exclude categorical variables from PMM for other categoricals
+  pred_matrix <- make.predictorMatrix(data)
+  
+  # Set methods explicitly
+  methods <- make.method(data)
+  methods[sapply(data, is.factor)] <- "polyreg"  # Use polytomous regression for factors
+  methods[sapply(data, is.numeric)] <- "pmm"     # Use PMM for numeric
+  
+  imp <- mice(data, 
+              m = 1, 
+              maxit = 10, 
+              method = methods,
+              predictorMatrix = pred_matrix,
+              printFlag = FALSE)  # Suppress verbose output
+  
+  result <- complete(imp)
+  
+  # Ensure factor levels match original data
+  for (col in names(data)) {
+    if (is.factor(data[[col]])) {
+      result[[col]] <- factor(result[[col]], levels = levels(data[[col]]))
+    }
+  }
+  
+  return(result)
 }
 
 impute_famd <- function(data) {
@@ -154,18 +177,159 @@ impute_famd <- function(data) {
   #' @return Imputed dataframe
   
   set.seed(42)
-  imp <- imputeFAMD(data, ncp = 2)$completeObs
-  imp %>% mutate(across(where(is.factor), as.factor))
+  
+  # Store original factor levels
+  factor_levels <- lapply(data, function(x) if(is.factor(x)) levels(x) else NULL)
+  
+  tryCatch({
+    imp <- imputeFAMD(data, ncp = 2)$completeObs
+    
+    # Restore factor levels
+    for (col in names(data)) {
+      if (is.factor(data[[col]])) {
+        imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
+      }
+    }
+    
+    return(imp)
+  }, error = function(e) {
+    cat("FAMD imputation failed:", e$message, "\n")
+    return(NULL)
+  })
 }
 
 impute_missforest <- function(data) {
-  #' Random forest-based imputation
+  #' Random forest-based imputation with robust error handling
   #' 
   #' @param data Dataframe with missing values
   #' @return Imputed dataframe
   
   set.seed(42)
-  missForest(data)$ximp
+  
+  # Store original factor levels and column types
+  factor_levels <- lapply(data, function(x) if(is.factor(x)) levels(x) else NULL)
+  original_types <- sapply(data, class)
+  
+  tryCatch({
+    # Create a clean copy of the data
+    clean_data <- data
+    
+    # Fix factor columns more robustly
+    for (col in names(clean_data)) {
+      if (is.factor(clean_data[[col]])) {
+        # Remove unused levels
+        clean_data[[col]] <- droplevels(clean_data[[col]])
+        
+        # Ensure at least 2 levels exist (missForest requirement)
+        if (length(levels(clean_data[[col]])) < 2) {
+          cat("Warning: Factor column", col, "has fewer than 2 levels. Converting to character.\n")
+          clean_data[[col]] <- as.character(clean_data[[col]])
+        }
+        
+        # Check for any remaining issues with factor levels
+        if (any(is.na(levels(clean_data[[col]])))) {
+          cat("Warning: Factor column", col, "has NA levels. Cleaning...\n")
+          clean_data[[col]] <- factor(clean_data[[col]], exclude = NULL)
+        }
+      }
+    }
+    
+    # Additional data validation
+    # Check for columns that are entirely missing
+    entirely_missing <- sapply(clean_data, function(x) all(is.na(x)))
+    if (any(entirely_missing)) {
+      cat("Warning: Removing entirely missing columns:", names(clean_data)[entirely_missing], "\n")
+      clean_data <- clean_data[, !entirely_missing, drop = FALSE]
+    }
+    
+    # Check for constant columns (no variation)
+    constant_cols <- sapply(clean_data, function(x) {
+      if (is.numeric(x)) {
+        non_na_vals <- x[!is.na(x)]
+        if (length(non_na_vals) <= 1) return(TRUE)
+        return(var(non_na_vals, na.rm = TRUE) == 0)
+      } else if (is.factor(x) || is.character(x)) {
+        non_na_vals <- x[!is.na(x)]
+        if (length(non_na_vals) <= 1) return(TRUE)
+        return(length(unique(non_na_vals)) == 1)
+      }
+      return(FALSE)
+    })
+    
+    if (any(constant_cols)) {
+      cat("Warning: Found constant columns:", names(clean_data)[constant_cols], "\n")
+      # For constant columns, we can't impute meaningfully, so we'll exclude them
+      clean_data <- clean_data[, !constant_cols, drop = FALSE]
+    }
+    
+    # Ensure we still have data to work with
+    if (ncol(clean_data) == 0) {
+      cat("Error: No valid columns remaining after cleaning\n")
+      return(NULL)
+    }
+    
+    # Additional check: ensure factors have valid structure
+    for (col in names(clean_data)) {
+      if (is.factor(clean_data[[col]])) {
+        # Try to reconstruct the factor cleanly
+        temp_vals <- as.character(clean_data[[col]])
+        clean_data[[col]] <- factor(temp_vals, exclude = NULL)
+      }
+    }
+    
+    # Run missForest with additional parameters for robustness
+    result <- missForest(clean_data, 
+                        verbose = FALSE,
+                        maxiter = 5,  # Reduce iterations to avoid convergence issues
+                        ntree = 50)   # Reduce trees for faster computation
+    
+    imputed_data <- result$ximp
+    
+    # Restore original structure for columns that were in original data
+    for (col in names(data)) {
+      if (col %in% names(imputed_data)) {
+        if (is.factor(data[[col]]) && !is.null(factor_levels[[col]])) {
+          # Restore original factor levels
+          imputed_data[[col]] <- factor(imputed_data[[col]], levels = factor_levels[[col]])
+        }
+      } else {
+        # Column was removed during cleaning - restore with original values
+        cat("Warning: Column", col, "was removed during cleaning. Restoring original values.\n")
+        imputed_data[[col]] <- data[[col]]
+      }
+    }
+    
+    # Ensure column order matches original
+    imputed_data <- imputed_data[, names(data), drop = FALSE]
+    
+    return(imputed_data)
+    
+  }, error = function(e) {
+    cat("missForest imputation failed with error:", e$message, "\n")
+    
+    # Provide more detailed diagnostics
+    cat("Data diagnostics:\n")
+    cat("- Dimensions:", dim(data), "\n")
+    cat("- Column types:", paste(sapply(data, class), collapse = ", "), "\n")
+    cat("- Missing proportions by column:\n")
+    missing_props <- sapply(data, function(x) mean(is.na(x)))
+    for (i in seq_along(missing_props)) {
+      cat(sprintf("  %s: %.2f%%\n", names(missing_props)[i], missing_props[i] * 100))
+    }
+    
+    # Check for problematic factor levels
+    factor_cols <- names(data)[sapply(data, is.factor)]
+    if (length(factor_cols) > 0) {
+      cat("- Factor column diagnostics:\n")
+      for (col in factor_cols) {
+        levels_info <- levels(data[[col]])
+        cat(sprintf("  %s: %d levels, %d non-missing values\n", 
+                   col, length(levels_info), sum(!is.na(data[[col]]))))
+      }
+    }
+    
+    return(NULL)
+  })
 }
 
 # ----------------------------
@@ -213,16 +377,26 @@ calculate_pfc <- function(original, imputed) {
 # ----------------------------
 
 process_midas_imputations <- function(file_pattern, output_file, num_files = 5) {
+  #' Process multiple MIDAS imputation files and create pooled result
+  
   # Read all MIDAS imputations
   imputations <- list()
+  files_found <- 0
+  
   for (i in 1:num_files) {
     file <- sprintf(file_pattern, i)
     if (file.exists(file)) {
-      imputations[[i]] <- read_csv(file, show_col_types = FALSE)
+      imputations[[length(imputations) + 1]] <- read_csv(file, show_col_types = FALSE)
+      files_found <- files_found + 1
     }
   }
 
-  if (length(imputations) == 0) return(NULL)
+  if (files_found == 0) {
+    cat("No MIDAS imputation files found with pattern:", file_pattern, "\n")
+    return(NULL)
+  }
+  
+  cat("Found", files_found, "MIDAS imputation files\n")
   
   # Create the averaged dataset
   pooled <- imputations[[1]]
@@ -234,15 +408,20 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5) 
     pooled[[col]] <- rowMeans(values, na.rm = TRUE)
   }
   
-   
   # Categorical columns: use mode
-  cat_cols <- names(pooled)[sapply(pooled, is.factor)]
+  cat_cols <- names(pooled)[sapply(pooled, function(x) is.factor(x) || is.character(x))]
   for (col in cat_cols) {
     values <- sapply(imputations, function(df) as.character(df[[col]]))
     pooled[[col]] <- apply(values, 1, function(row) {
-      ux <- unique(row)
+      ux <- unique(row[!is.na(row)])
+      if (length(ux) == 0) return(NA)
       ux[which.max(tabulate(match(row, ux)))]
-    }) %>% factor(levels = levels(pooled[[col]]))
+    })
+    
+    # Convert back to factor if original was factor
+    if (is.factor(imputations[[1]][[col]])) {
+      pooled[[col]] <- factor(pooled[[col]], levels = levels(imputations[[1]][[col]]))
+    }
   }
   
   # Save pooled imputation
@@ -266,32 +445,44 @@ run_imputation_pipeline <- function(data_path,
   results <- data.frame()
   
   for (rate in missing_rates) {
-    # 2. Introduce MCAR missingness
+    cat("\n=== Processing Missing Rate:", paste0(rate*100, "%"), "===\n")
+    
+    # 2. Introduce MAR missingness
     mar_data <- insert_mar(clean_data, 
                            target_cols = names(clean_data), # All columns
                            predictor_cols = NULL,         # Random predictors
                            missing_rate = rate)
     
     for (method in methods) {
+      cat("\nTrying method:", method, "\n")
+      
       # 3. Impute missing values
       start_time <- Sys.time()
+      imputed_data <- NULL
       
       if (method == "MIDAS") {
         # Special handling for MIDAS
-        midas_input <- sprintf("temp_mcar_%.2f.csv", rate)
+        midas_input <- sprintf("temp_mar_%.2f.csv", rate)  # Fixed filename
         midas_output_prefix <- sprintf("midas_%.2f", rate)
         
         # Save temporary file for Python processing
         write_csv(mar_data, midas_input)
+        cat("Saved input file:", midas_input, "\n")
         
         # Call Python script (assumes it's in same directory)
-        system(sprintf("python MIDAS.Pipe.py %s %s", midas_input, midas_output_prefix))
+        python_cmd <- sprintf("python MIDAS.Pipe.py %s %s", midas_input, midas_output_prefix)
+        cat("Running:", python_cmd, "\n")
+        system(python_cmd)
 
         # Process and pool MIDAS imputations
         imputed_data <- process_midas_imputations(
           file_pattern = paste0(midas_output_prefix, "_imp_%d.csv"),
           output_file = paste0(midas_output_prefix, "_pooled.csv")
         )
+        
+        # Clean up temporary file
+        if (file.exists(midas_input)) file.remove(midas_input)
+        
       } else {
         # R-based methods
         imputed_data <- tryCatch({
@@ -305,9 +496,11 @@ run_imputation_pipeline <- function(data_path,
           NULL
         })
       }
-
     
-      if (is.null(imputed_data)) next
+      if (is.null(imputed_data)) {
+        cat(method, "imputation returned NULL, skipping...\n")
+        next
+      }
       
       time_taken <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
       
@@ -326,10 +519,9 @@ run_imputation_pipeline <- function(data_path,
         NumCols = ncol(clean_data)
       ))
       
-
       # Print progress
       cat(sprintf(
-        "Method: %-10s | Rate: %-4s | RMSE: %.4f | PFC: %.4f | Time: %.1fs\n",
+        "✓ Method: %-10s | Rate: %-4s | RMSE: %.4f | PFC: %.4f | Time: %.1fs\n",
         method, paste0(rate*100, "%"), rmse, pfc, time_taken
       ))
     }
@@ -337,7 +529,8 @@ run_imputation_pipeline <- function(data_path,
   
   # Save results
   write_csv(results, "imputation_results.csv")
-  cat("\nResults saved to 'imputation_results.csv'\n")
+  cat("\n=== PIPELINE COMPLETE ===\n")
+  cat("Results saved to 'imputation_results.csv'\n")
   
   return(results)
 }
