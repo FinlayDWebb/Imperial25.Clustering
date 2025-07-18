@@ -374,6 +374,46 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5) 
 }
 
 # ----------------------------
+# EVALUATION METRICS FUNCTIONS
+# ----------------------------
+
+calculate_rmse <- function(original, imputed) {
+  #' Calculates RMSE for numerical columns
+  #' 
+  #' @param original Complete original dataframe
+  #' @param imputed Imputed dataframe
+  #' @return Mean RMSE across numerical columns
+  
+  num_cols <- names(original)[sapply(original, is.numeric)]
+  
+  if (length(num_cols) == 0) return(NA)
+  
+  rmse_vals <- sapply(num_cols, function(col) {
+    sqrt(mean((original[[col]] - imputed[[col]])^2, na.rm = TRUE))
+  })
+  
+  mean(rmse_vals, na.rm = TRUE)
+}
+
+calculate_pfc <- function(original, imputed) {
+  #' Calculates PFC for categorical columns
+  #' 
+  #' @param original Complete original dataframe
+  #' @param imputed Imputed dataframe
+  #' @return Mean PFC across categorical columns
+  
+  cat_cols <- names(original)[sapply(original, is.factor)]
+  
+  if (length(cat_cols) == 0) return(NA)
+  
+  pfc_vals <- sapply(cat_cols, function(col) {
+    mean(original[[col]] != imputed[[col]], na.rm = TRUE)
+  })
+  
+  mean(pfc_vals, na.rm = TRUE)
+}
+
+# ----------------------------
 # 6. MAIN PIPELINE
 # ----------------------------
 
@@ -476,6 +516,7 @@ run_imputation_pipeline <- function(data_path,
   
   return(results)
 }
+
 
 # =============================================
 # EXECUTE THE PIPELINE
