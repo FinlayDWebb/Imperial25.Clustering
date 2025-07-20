@@ -137,12 +137,18 @@ insert_mar <- function(data, target_cols, predictor_cols, missing_rate) {
 # ----------------------------
 
 impute_mice <- function(data) {
-  #' MICE imputation using predictive mean matching
+  #' MICE imputation with multiple datasets and pooling
   #' 
   #' @param data Dataframe with missing values
-  #' @return Imputed dataframe
+  #' @return Pooled imputed dataframe
+  
+  cat("\n=== MICE Imputation with Pooling ===\n")
+  
+  # Ensure factors are properly set
+  data <- data %>% mutate(across(where(is.character), as.factor))
   
   set.seed(42)
+  
   # Create predictor matrix - exclude categorical variables from PMM for other categoricals
   pred_matrix <- make.predictorMatrix(data)
   
@@ -151,23 +157,66 @@ impute_mice <- function(data) {
   methods[sapply(data, is.factor)] <- "polyreg"  # Use polytomous regression for factors
   methods[sapply(data, is.numeric)] <- "pmm"     # Use PMM for numeric
   
-  imp <- mice(data, 
-              m = 1, 
-              maxit = 10, 
-              method = methods,
-              predictorMatrix = pred_matrix,
-              printFlag = FALSE)  # Suppress verbose output
+  cat("Imputation methods:\n")
+  print(methods[methods != ""])
   
-  result <- complete(imp)
+  # Perform MICE with multiple imputations (m=5)
+  imp <- mice(data,
+             m = 5,                    # Create 5 imputed datasets
+             maxit = 10,
+             method = methods,
+             predictorMatrix = pred_matrix,
+             printFlag = TRUE,         # Show progress
+             seed = 42)
+  
+  # Pool the results
+  cat("\nPooling 5 imputations...\n")
+  
+  # Extract all completed datasets
+  completed_datasets <- vector("list", 5)
+  for (i in 1:5) {
+    completed_datasets[[i]] <- complete(imp, i)
+  }
+  
+  # Pool continuous variables using mean
+  # Pool categorical variables using mode
+  pooled_data <- data.frame(matrix(nrow = nrow(data), ncol = ncol(data)))
+  names(pooled_data) <- names(data)
+  
+  for (col in names(data)) {
+    if (is.numeric(data[[col]])) {
+      # For continuous variables: average across imputations
+      values_matrix <- sapply(completed_datasets, function(df) df[[col]])
+      pooled_data[[col]] <- rowMeans(values_matrix, na.rm = TRUE)
+    } else if (is.factor(data[[col]])) {
+      # For categorical variables: use mode (most frequent) across imputations
+      pooled_values <- character(nrow(data))
+      for (row in 1:nrow(data)) {
+        if (is.na(data[[col]][row])) {
+          # Get values from all imputations for this missing cell
+          imputed_values <- sapply(completed_datasets, function(df) as.character(df[[col]][row]))
+          # Find mode (most frequent value)
+          mode_value <- names(sort(table(imputed_values), decreasing = TRUE))[1]
+          pooled_values[row] <- mode_value
+        } else {
+          # Keep original observed value
+          pooled_values[row] <- as.character(data[[col]][row])
+        }
+      }
+      pooled_data[[col]] <- factor(pooled_values, levels = levels(data[[col]]))
+    }
+  }
   
   # Ensure factor levels match original data
   for (col in names(data)) {
     if (is.factor(data[[col]])) {
-      result[[col]] <- factor(result[[col]], levels = levels(data[[col]]))
+      pooled_data[[col]] <- factor(pooled_data[[col]], levels = levels(data[[col]]))
     }
   }
   
-  return(result)
+  cat("Pooling complete. Missing values after pooling:", sum(is.na(pooled_data)), "\n")
+  
+  return(pooled_data)
 }
 
 impute_famd <- function(data) {
