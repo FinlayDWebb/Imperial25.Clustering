@@ -391,7 +391,7 @@ if (FALSE) {  # Set to TRUE to run
     imputed_files = c(
       "mice_0.05_imputed.csv",
       "famd_0.05_imputed.csv", 
-      "missforest_0.05_imputed.csv"
+      "missforest_0.05_imputed.csv",
       "midas_0.05_pooled.csv",
       "mice_0.10_imputed.csv",
       "famd_0.10_imputed.csv",
