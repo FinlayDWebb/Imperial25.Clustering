@@ -532,6 +532,11 @@ run_imputation_pipeline <- function(data_path,
         cat(method, "imputation returned NULL, skipping...\n")
         next
       }
+
+      # Save the imputed dataset to CSV ***
+      output_filename <- sprintf("%s_%.2f_imputed.csv", tolower(method), rate)
+      write_csv(imputed_data, output_filename)
+      cat("Saved imputed data to:", output_filename, "\n")
       
       time_taken <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
       
