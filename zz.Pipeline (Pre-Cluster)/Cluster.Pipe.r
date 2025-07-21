@@ -385,7 +385,7 @@ evaluate_by_pattern <- function(original_data_path,
 # =============================================
 
 # Example 1: Evaluate specific imputed files
-if (FALSE) {  # Set to TRUE to run
+if (TRUE) {  # Set to TRUE to run
   results <- evaluate_specific_files(
     original_data_path = "adult_sample_processed.csv",
     imputed_files = c(
