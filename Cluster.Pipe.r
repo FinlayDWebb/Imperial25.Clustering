@@ -84,8 +84,23 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
     cat_cols <- col_info$categorical
     cont_cols <- col_info$continuous
     
+    # --- CRITICAL DATA CONVERSION ---
+    # Ensure continuous columns are numeric matrices
+    if (length(cont_cols) > 0) {
+      data_processed[, cont_cols] <- lapply(data_processed[, cont_cols, drop = FALSE], as.numeric)
+    }
+    
+    # Ensure categorical columns are factors
+    if (length(cat_cols) > 0) {
+      data_processed[, cat_cols] <- lapply(data_processed[, cat_cols, drop = FALSE], function(x) {
+        if(!is.factor(x)) as.factor(x) else x
+      })
+    }
+    
     cat(sprintf("DIBmix clustering: %d categorical, %d continuous columns\n", 
                 length(cat_cols), length(cont_cols)))
+    cat("Data types after conversion:\n")
+    print(sapply(data_processed, class))
     
     # Perform DIBmix clustering
     if (length(cat_cols) > 0 && length(cont_cols) > 0) {
@@ -98,35 +113,47 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
                        lambda = -1,
                        nstart = 50)
     } else if (length(cont_cols) > 0) {
-      # Continuous only - convert to matrix and use DIBcont
-      cat("Warning: No categorical columns found, using DIBcont instead\n")
+      # Continuous only
+      cat("Using DIBcont for continuous data\n")
       X_cont <- as.matrix(data_processed[, cont_cols, drop = FALSE])
       result <- DIBcont(X = X_cont, ncl = n_clusters, s = -1, nstart = 50)
     } else if (length(cat_cols) > 0) {
-      # Categorical only - use DIBcat
-      cat("Warning: No continuous columns found, using DIBcat instead\n")
+      # Categorical only
+      cat("Using DIBcat for categorical data\n")
       X_cat <- data_processed[, cat_cols, drop = FALSE]
       result <- DIBcat(X = X_cat, ncl = n_clusters, lambda = -1, nstart = 50)
     } else {
       stop("No valid columns found for clustering")
     }
     
+    # --- ERROR CHECK BEFORE RETURNING ---
+    if (is.null(result) || !"Cluster" %in% names(result)) {
+      stop("Clustering returned invalid result object")
+    }
+    
     # Add metadata
     result$column_info <- col_info
     result$n_clusters <- n_clusters
     
-    cat(sprintf("Clustering completed: Entropy = %.4f, Mutual Info = %.4f\n", 
-                result_cat$Cluster , result$Entropy, result$MutualInfo))
+    cat(sprintf("Clustering completed: Entropy = %.4f, Mutual Info = %.4f\n",
+                result$Entropy, result$MutualInfo))
+    cat("Cluster assignments:", head(result$Cluster), "\n")
     
     return(result)
     
   }, error = function(e) {
-    cat("DIBmix clustering failed:", e$message, "\n")
+    # --- ENHANCED ERROR REPORTING ---
+    cat("\n!!! CLUSTERING FAILURE DETAILS !!!\n")
+    cat("Error message:", e$message, "\n")
+    cat("Data dimensions:", dim(data), "\n")
+    if (exists("col_info")) {
+      cat("Categorical columns:", length(col_info$categorical), "\n")
+      cat("Continuous columns:", length(col_info$continuous), "\n")
+    }
+    cat("n_clusters:", n_clusters, "\n")
     return(NULL)
   })
 }
-
-cat("Clustering successful! Cluster assignments:", head(result$Cluster), "\n")
 
 calculate_ari <- function(true_clusters, pred_clusters) {
   #' Calculate Adjusted Rand Index between two clustering solutions
