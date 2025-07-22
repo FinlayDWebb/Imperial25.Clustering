@@ -115,8 +115,8 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
     result$column_info <- col_info
     result$n_clusters <- n_clusters
     
-    cat(sprintf("Clustering completed: Entropy = %.4f, Mutual Info = %.4f\n",
-                result$Entropy, result$MutualInfo))
+    cat(sprintf("Clustering completed: Entropy = %.4f, Mutual Info = %.4f\n", 
+                result_cat$Cluster , result$Entropy, result$MutualInfo))
     
     return(result)
     
@@ -125,6 +125,8 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
     return(NULL)
   })
 }
+
+cat("Clustering successful! Cluster assignments:", head(result$Cluster), "\n")
 
 calculate_ari <- function(true_clusters, pred_clusters) {
   #' Calculate Adjusted Rand Index between two clustering solutions
