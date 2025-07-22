@@ -578,7 +578,7 @@ run_imputation_pipeline <- function(data_path,
 
 # Example usage
 results <- run_imputation_pipeline(
-  data_path = "adult_sample_processed.csv",
+  data_path = "diagnosis_data.csv",
   missing_rates = c(0.05, 0.10, 0.15),
   methods = c("MICE", "FAMD", "missForest", "MIDAS")
 )

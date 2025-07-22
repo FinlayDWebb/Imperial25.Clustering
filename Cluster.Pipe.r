@@ -387,7 +387,7 @@ evaluate_by_pattern <- function(original_data_path,
 # Example 1: Evaluate specific imputed files
 if (TRUE) {  # Set to TRUE to run
   results <- evaluate_specific_files(
-    original_data_path = "adult_sample_processed.csv",
+    original_data_path = "diagnosis_data.csv",
     imputed_files = c(
       "mice_0.05_imputed.csv",
       "famd_0.05_imputed.csv", 
