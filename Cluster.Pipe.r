@@ -93,7 +93,10 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
       result <- DIBmix(X = data_processed, 
                        ncl = n_clusters, 
                        catcols = cat_cols, 
-                       contcols = cont_cols)
+                       contcols = cont_cols,
+                       s = -1,
+                       lambda = -1,
+                       nstart = 50)
     } else if (length(cont_cols) > 0) {
       # Continuous only - convert to matrix and use DIBcont
       cat("Warning: No categorical columns found, using DIBcont instead\n")
