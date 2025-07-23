@@ -34,11 +34,6 @@ preprocess_data <- function(file_path) {
     # Convert character columns to factors
     mutate(across(where(is.character), as.factor))
   
-  # Remove rows with any missing values
-  complete_data <- clean_data %>% 
-    drop_na() %>%
-    distinct()
-  
   cat("Data preprocessing complete\n")
   cat("Original dimensions:", dim(data), "\n")
   cat("Cleaned dimensions:", dim(complete_data), "\n")

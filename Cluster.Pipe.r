@@ -9,6 +9,7 @@
 library(readr)
 library(dplyr)
 library(devtools)
+library(tidyr) 
 
 # Install and load IBclust if not already installed
 if (!require(IBclust, quietly = TRUE)) {
@@ -192,20 +193,13 @@ calculate_ari <- function(true_clusters, pred_clusters) {
 # MAIN CLUSTERING EVALUATION FUNCTION
 # ----------------------------
 
+#################
+
 evaluate_clustering_performance <- function(original_data_path,
                                            imputed_files_pattern = NULL,
                                            imputed_files_list = NULL,
                                            n_clusters = 3,
                                            output_file = "clustering_ari_results.csv") {
-  #' Evaluate clustering performance of imputed datasets against original
-  #' 
-  #' @param original_data_path Path to original complete dataset
-  #' @param imputed_files_pattern Pattern for imputed files (e.g., "*_imputed.csv")
-  #' @param imputed_files_list Manual list of imputed file paths
-  #' @param n_clusters Number of clusters for DIBmix
-  #' @param output_file Output CSV file name
-  #' @return Dataframe with ARI results
-  
   cat("=== CLUSTERING EVALUATION ===\n")
   
   # Step 5: Load and cluster original dataset
@@ -221,8 +215,8 @@ evaluate_clustering_performance <- function(original_data_path,
   }
   
   original_clusters <- original_clustering$Cluster
-  cat(sprintf("Original clustering: %d clusters, Entropy = %.4f\n", 
-              n_clusters, original_clustering$Entropy))
+  cat(sprintf("Original clustering: %d clusters, Entropy = %.4f, Cluster vector length: %d\n", 
+              n_clusters, original_clustering$Entropy, length(original_clusters)))
   
   # Get list of imputed files
   if (!is.null(imputed_files_pattern)) {
@@ -246,7 +240,7 @@ evaluate_clustering_performance <- function(original_data_path,
   cat(sprintf("\nFound %d imputed files:\n", length(imputed_files)))
   for (f in imputed_files) cat(sprintf("  - %s\n", f))
   
-  # Initialize results
+# Initialize results
   results <- data.frame()
   
   # Step 6 & 7: Process each imputed dataset
@@ -264,18 +258,31 @@ evaluate_clustering_performance <- function(original_data_path,
     missing_rate_match <- regmatches(imputed_file, regexpr("0\\.[0-9]+", imputed_file))
     missing_rate <- if (length(missing_rate_match) > 0) as.numeric(missing_rate_match[1]) else NA
     
-    tryCatch({
-      # Step 6: Load and cluster imputed dataset
+  tryCatch({
+      # Step 6: Load imputed dataset
       imputed_data <- read_csv(imputed_file, show_col_types = FALSE)
       cat(sprintf("Imputed data dimensions: %d x %d\n", nrow(imputed_data), ncol(imputed_data)))
       
-      # Check dimension compatibility
+      # Ensure row count matches original
       if (nrow(imputed_data) != nrow(original_data)) {
-        cat("WARNING: Row count mismatch with original data\n")
-      }
-      if (ncol(imputed_data) != ncol(original_data)) {
-        cat("WARNING: Column count mismatch with original data\n")
-      }
+        cat("WARNING: Row count mismatch (Original:", nrow(original_data), "vs Imputed:", nrow(imputed_data), "). Aligning using common indices.\n")
+        
+        # Add index column to preserve row order
+        imputed_data$.row_index <- 1:nrow(imputed_data)
+        
+        # Create full index template
+        full_index <- data.frame(.row_index = 1:nrow(original_data))
+        
+        # Merge to align rows
+        aligned_data <- full_index %>%
+          left_join(imputed_data, by = ".row_index")
+        
+        # Remove index column
+        aligned_data$.row_index <- NULL
+        
+        imputed_data <- aligned_data
+        cat(sprintf("Aligned imputed data dimensions: %d x %d\n", nrow(imputed_data), ncol(imputed_data)))
+      }      
       
       # Cluster imputed dataset
       start_time <- Sys.time()
@@ -289,17 +296,29 @@ evaluate_clustering_performance <- function(original_data_path,
         imputed_mutinfo <- NA
       } else {
         imputed_clusters <- imputed_clustering$Cluster
-        imputed_entropy <- imputed_clustering$Entropy
-        imputed_mutinfo <- imputed_clustering$MutualInfo
+        
+        # CRITICAL FIX: Validate cluster vector length
+        if (length(original_clusters) != length(imputed_clusters)) {
+          cat(sprintf("ERROR: Cluster vector length mismatch (original: %d, imputed: %d). Using intersection.\n",
+                      length(original_clusters), length(imputed_clusters)))
+          
+          # Use only common indices
+          common_count <- min(length(original_clusters), length(imputed_clusters))
+          orig_subset <- original_clusters[1:common_count]
+          imp_subset <- imputed_clusters[1:common_count]
+        } else {
+          orig_subset <- original_clusters
+          imp_subset <- imputed_clusters
+        }
         
         # Step 7: Calculate ARI
-        ari_score <- calculate_ari(original_clusters, imputed_clusters)
+        ari_score <- calculate_ari(orig_subset, imp_subset)
         
         cat(sprintf("Imputed clustering: Entropy = %.4f, Mutual Info = %.4f\n",
                     imputed_entropy, imputed_mutinfo))
         cat(sprintf("ARI Score: %.4f\n", ari_score))
       }
-      
+
       # Store results
       results <- rbind(results, data.frame(
         File = basename(imputed_file),
@@ -464,16 +483,3 @@ if (FALSE) {  # Set to TRUE to run
   
   print(head(results))
 }
-
-original_clustering <- perform_dibmix_clustering(original_data, n_clusters = 3)
-
-# This will show the structure
-str(debug_data_processed)
-
-# This will show column types
-sapply(debug_data_processed, class)
-
-# This will show factor levels
-lapply(debug_data_processed[, sapply(debug_data_processed, is.factor)], levels)
-
-perform_dibmix_clustering(original_data["nausea", "urine_pushing"], n_clusters=3)
