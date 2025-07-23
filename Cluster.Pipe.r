@@ -70,6 +70,10 @@ identify_column_types <- function(data) {
   ))
 }
 
+# data <- read.csv("diagnosis_data.csv")
+
+# str(data)
+
 perform_dibmix_clustering <- function(data, n_clusters = 3) {
   #' Perform DIBmix clustering on mixed-type data
   #' 
@@ -85,7 +89,7 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
     cont_cols <- col_info$continuous
     
     # --- CRITICAL DATA CONVERSION ---
-    # Ensure continuous columns are numeric matrices
+    # Ensure continuous columns are numeric 
     if (length(cont_cols) > 0) {
       data_processed[, cont_cols] <- lapply(data_processed[, cont_cols, drop = FALSE], as.numeric)
     }
@@ -101,6 +105,8 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
                 length(cat_cols), length(cont_cols)))
     cat("Data types after conversion:\n")
     print(sapply(data_processed, class))
+
+    data_processed <- as.data.frame(data_processed)
     
     # Perform DIBmix clustering
     if (length(cat_cols) > 0 && length(cont_cols) > 0) {
@@ -390,7 +396,7 @@ evaluate_clustering_performance <- function(original_data_path,
 # CONVENIENCE WRAPPER FUNCTIONS
 # ----------------------------
 
-# For when you know exactly which files to evaluate
+# For when I know exactly which files to evaluate
 evaluate_specific_files <- function(original_data_path, 
                                    imputed_files, 
                                    n_clusters = 3) {
@@ -458,3 +464,16 @@ if (FALSE) {  # Set to TRUE to run
   
   print(head(results))
 }
+
+original_clustering <- perform_dibmix_clustering(original_data, n_clusters = 3)
+
+# This will show the structure
+str(debug_data_processed)
+
+# This will show column types
+sapply(debug_data_processed, class)
+
+# This will show factor levels
+lapply(debug_data_processed[, sapply(debug_data_processed, is.factor)], levels)
+
+perform_dibmix_clustering(original_data["nausea", "urine_pushing"], n_clusters=3)
