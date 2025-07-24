@@ -35,10 +35,9 @@ preprocess_data <- function(file_path) {
     mutate(across(where(is.character), as.factor))
   
   cat("Data preprocessing complete\n")
-  cat("Original dimensions:", dim(data), "\n")
-  cat("Cleaned dimensions:", dim(complete_data), "\n")
+  cat("Dimensions:", dim(clean_data), "\n")
   
-  return(complete_data)
+  return(clean_data)
 }
 
 # ----------------------------

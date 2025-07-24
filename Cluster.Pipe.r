@@ -296,6 +296,9 @@ evaluate_clustering_performance <- function(original_data_path,
         imputed_mutinfo <- NA
       } else {
         imputed_clusters <- imputed_clustering$Cluster
+
+        imputed_entropy <- imputed_clustering$Entropy
+        imputed_mutinfo <- imputed_clustering$MutualInfo
         
         # CRITICAL FIX: Validate cluster vector length
         if (length(original_clusters) != length(imputed_clusters)) {
