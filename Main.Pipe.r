@@ -565,17 +565,4 @@ run_imputation_pipeline <- function(data_path,
   return(results)
 }
 
-
-# =============================================
-# EXECUTE THE PIPELINE
-# =============================================
-
-# Example usage
-results <- run_imputation_pipeline(
-  data_path = "input_data",
-  missing_rates = c(0.05, 0.10, 0.15),
-  methods = c("MICE", "FAMD", "missForest", "MIDAS")
-)
-
-# Print final results
-print(results)
+# This is executed by Total.Pipe.r

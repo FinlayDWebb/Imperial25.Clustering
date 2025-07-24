@@ -24,9 +24,7 @@ source("Cluster.Pipe.r")
 
 # Define datasets to process (add/remove as needed)
 datasets <- c(
-  "diagnosis_data.csv",
-  "customer_data.csv", # Placeholders right now.
-  "sensor_readings.csv"
+  "diagnosis_data.csv"
 )
 
 # Define parameters for the pipeline
