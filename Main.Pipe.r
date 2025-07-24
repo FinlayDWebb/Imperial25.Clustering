@@ -213,12 +213,12 @@ impute_mice <- function(data) {
   return(pooled_data)
 }
 
-impute_famd_simple <- function(data, ncp = 10) {
+impute_famd <- function(data, ncp = 10) {
   set.seed(42)
   
   # 1. Convert only categorical columns to factors
   data <- as.data.frame(lapply(data, function(x) {
-    if (is.character(x) || is.logical(x) || is.numeric(x) && length(unique(x)) <= 10) {
+    if (is.character(x) || is.logical(x) || (is.numeric(x) && length(unique(x)) <= 10)) {
       factor(x)
     } else {
       x
@@ -249,13 +249,19 @@ impute_famd_simple <- function(data, ncp = 10) {
       }
     }
     
+    # 5. CRITICAL FIX: Convert back to factors with original levels
+    for (col in names(data)) {
+      if (is.factor(data[[col]])) {
+        imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
+      }
+    }
+    
     return(imp)
   }, error = function(e) {
     message("FAMD failed: ", e$message)
     return(NULL)
   })
 }
-
 
 impute_missforest <- function(data) {
   #' Random forest-based imputation with simplified, robust handling
