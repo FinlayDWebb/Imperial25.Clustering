@@ -1,0 +1,2 @@
+File,Method,MissingRate,ARI,OriginalEntropy,OriginalMutInfo,ImputedEntropy,ImputedMutInfo,ClusteringTimeSec,NClusters,NRows,NCols
+diagnosis_data_imputation_results.csv,imputation,NA,NA,1.4952757656735511,0.06560567425538455,NA,NA,0.0012149810791015625,3,120,7

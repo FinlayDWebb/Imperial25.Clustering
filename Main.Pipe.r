@@ -463,6 +463,10 @@ calculate_pfc <- function(original, imputed) {
 run_imputation_pipeline <- function(data_path, 
                                     missing_rates = c(0.05, 0.10, 0.15),
                                     methods = c("MICE", "FAMD", "missForest", "MIDAS")) {
+
+  # Extract dataset name for file prefixes
+  base_name <- tools::file_path_sans_ext(basename(data_path))
+
   # 1. Preprocess data
   clean_data <- preprocess_data(data_path)
   
@@ -487,8 +491,8 @@ run_imputation_pipeline <- function(data_path,
       
       if (method == "MIDAS") {
         # Special handling for MIDAS
-        midas_input <- sprintf("temp_mar_%.2f.csv", rate)  # Fixed filename
-        midas_output_prefix <- sprintf("midas_%.2f", rate)
+        midas_input <- sprintf("%s_mar_%.2f.csv", base_name, rate)
+        midas_output_prefix <- sprintf("%s_midas_%.2f", base_name, rate)
         
         # Save temporary file for Python processing
         write_csv(mar_data, midas_input)
@@ -528,7 +532,7 @@ run_imputation_pipeline <- function(data_path,
       }
 
       # Save the imputed dataset to CSV ***
-      output_filename <- sprintf("%s_%.2f_imputed.csv", tolower(method), rate)
+      output_filename <- sprintf("%s_%s_%.2f_imputed.csv", base_name, tolower(method), rate)
       write_csv(imputed_data, output_filename)
       cat("Saved imputed data to:", output_filename, "\n")
       

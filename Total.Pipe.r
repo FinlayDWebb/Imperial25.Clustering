@@ -1,6 +1,6 @@
 # Total.Pipe.r
 # =============================================
-# MASTER PIPELINE SCRIPT
+# MASTER PIPELINE SCRIPT (REVISED)
 # =============================================
 # Coordinates the entire workflow:
 # 1. Iterates through multiple datasets
@@ -22,7 +22,7 @@ source("Cluster.Pipe.r")
 # 1. DATASET CONFIGURATION
 # ----------------------------
 
-# Define datasets to process (add/remove as needed)
+# Define datasets to process
 datasets <- c(
   "diagnosis_data.csv"
 )
@@ -67,7 +67,7 @@ for (dataset in datasets) {
   # ----------------------------
   cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
   
-  # Generate file pattern for imputed datasets
+  # Generate file pattern for current dataset's imputed files
   imputed_pattern <- paste0(dataset_name, "_*.csv")
   
   clustering_results <- evaluate_clustering_performance(
