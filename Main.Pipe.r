@@ -213,33 +213,61 @@ impute_mice <- function(data) {
   return(pooled_data)
 }
 
-impute_famd <- function(data) {
-  #' FAMD imputation using factor analysis
-  #' 
-  #' @param data Dataframe with missing values
-  #' @return Imputed dataframe
-  
+impute_famd <- function(data, ncp = 5) {
   set.seed(42)
   
-  # Store original factor levels
-  factor_levels <- lapply(data, function(x) if(is.factor(x)) levels(x) else NULL)
+  # 1. Convert all character/logical columns and specified numerics to factors
+  data <- as.data.frame(lapply(data, function(x) {
+    if (is.character(x) || is.logical(x)) {
+      return(factor(x))
+    } else if (is.numeric(x) && length(unique(x)) < 10) {
+      return(factor(x))  # Convert low-cardinality numerics to factors
+    } else {
+      return(x)
+    }
+  }))
+  
+  # 2. Ensure valid column names
+  names(data) <- make.names(names(data))
+  
+  # 3. Store original factor levels
+  factor_levels <- lapply(data, function(x) if (is.factor(x)) levels(x) else NULL)
   
   tryCatch({
-    imp <- imputeFAMD(data, ncp = 2)$completeObs
+    imp <- missMDA::imputeFAMD(data, ncp = ncp)$completeObs
     
-    # Restore factor levels
+    # 4. Process categorical columns
     for (col in names(data)) {
       if (is.factor(data[[col]])) {
-        imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
+        # Find indicator columns
+        indicator_cols <- grep(paste0("^", col, "\\."), names(imp), value = TRUE)
+        
+        # Fallback matching if standard fails
+        if (length(indicator_cols) == 0) {
+          indicator_cols <- grep(paste0("^", col, "_"), names(imp), value = TRUE)
+        }
+        
+        if (length(indicator_cols) == 0) {
+          warning("No indicator columns found for ", col, ". Using first matching prefix.")
+          indicator_cols <- grep(paste0("^", col), names(imp), value = TRUE)
+          indicator_cols <- setdiff(indicator_cols, col)
+        }
+        
+        if (length(indicator_cols) == 0) next  # Skip if still not found
+        
+        # Convert to category
+        pred <- as.matrix(imp[, indicator_cols, drop = FALSE])
+        max_idx <- apply(pred, 1, which.max)
+        imp[[col]] <- factor_levels[[col]][max_idx]
       }
     }
-    
     return(imp)
   }, error = function(e) {
-    cat("FAMD imputation failed:", e$message, "\n")
+    message("FAMD FAILED: ", e$message)
     return(NULL)
   })
 }
+
 
 impute_missforest <- function(data) {
   #' Random forest-based imputation with simplified, robust handling
