@@ -213,57 +213,45 @@ impute_mice <- function(data) {
   return(pooled_data)
 }
 
-impute_famd <- function(data, ncp = 5) {
+impute_famd_simple <- function(data, ncp = 10) {
   set.seed(42)
   
-  # 1. Convert all character/logical columns and specified numerics to factors
+  # 1. Convert only categorical columns to factors
   data <- as.data.frame(lapply(data, function(x) {
-    if (is.character(x) || is.logical(x)) {
-      return(factor(x))
-    } else if (is.numeric(x) && length(unique(x)) < 10) {
-      return(factor(x))  # Convert low-cardinality numerics to factors
+    if (is.character(x) || is.logical(x) || is.numeric(x) && length(unique(x)) <= 10) {
+      factor(x)
     } else {
-      return(x)
+      x
     }
   }))
   
-  # 2. Ensure valid column names
-  names(data) <- make.names(names(data))
-  
-  # 3. Store original factor levels
+  # 2. Store original levels
   factor_levels <- lapply(data, function(x) if (is.factor(x)) levels(x) else NULL)
   
   tryCatch({
+    # 3. Perform imputation
     imp <- missMDA::imputeFAMD(data, ncp = ncp)$completeObs
     
-    # 4. Process categorical columns
+    # 4. Convert probability vectors back to categories
     for (col in names(data)) {
       if (is.factor(data[[col]])) {
-        # Find indicator columns
-        indicator_cols <- grep(paste0("^", col, "\\."), names(imp), value = TRUE)
+        # Find probability columns (they start with colname + ".")
+        prob_cols <- grep(paste0("^", col, "\\."), names(imp), value = TRUE)
         
-        # Fallback matching if standard fails
-        if (length(indicator_cols) == 0) {
-          indicator_cols <- grep(paste0("^", col, "_"), names(imp), value = TRUE)
+        if (length(prob_cols) > 0) {
+          # Get probability matrix
+          probs <- as.matrix(imp[, prob_cols])
+          
+          # Assign category with highest probability
+          max_cat <- apply(probs, 1, which.max)
+          imp[[col]] <- factor_levels[[col]][max_cat]
         }
-        
-        if (length(indicator_cols) == 0) {
-          warning("No indicator columns found for ", col, ". Using first matching prefix.")
-          indicator_cols <- grep(paste0("^", col), names(imp), value = TRUE)
-          indicator_cols <- setdiff(indicator_cols, col)
-        }
-        
-        if (length(indicator_cols) == 0) next  # Skip if still not found
-        
-        # Convert to category
-        pred <- as.matrix(imp[, indicator_cols, drop = FALSE])
-        max_idx <- apply(pred, 1, which.max)
-        imp[[col]] <- factor_levels[[col]][max_idx]
       }
     }
+    
     return(imp)
   }, error = function(e) {
-    message("FAMD FAILED: ", e$message)
+    message("FAMD failed: ", e$message)
     return(NULL)
   })
 }
