@@ -213,6 +213,9 @@ impute_mice <- function(data) {
   return(pooled_data)
 }
 
+# Perhaps this won't work with the high categorical datasets. I need to re-think this. Perhaps
+# use some more choice datasets.
+
 impute_famd <- function(data, ncp = 10) {
   set.seed(42)
   
