@@ -34,12 +34,34 @@ if (!dir.exists("clustering_results")) {
 # 1. DATASET CONFIGURATION
 # ----------------------------
 
-# Define datasets to process
-datasets <- c(
-  "diagnosis_data.csv"
+# Get all CSV files from the Processed.Data folder
+data_folder <- "Processed.Data"
+
+# Check if folder exists
+if (!dir.exists(data_folder)) {
+  stop("Error: 'Processed.Data' folder not found in current directory!")
+}
+
+# Get all CSV files from the folder
+datasets <- list.files(
+  path = data_folder,
+  pattern = "\\.csv$",
+  full.names = TRUE,  # This gives full path like "Processed.Data/file1.csv"
+  ignore.case = TRUE
 )
 
-# Define parameters for the pipeline
+# Check if any CSV files were found
+if (length(datasets) == 0) {
+  stop("Error: No CSV files found in 'Processed.Data' folder!")
+}
+
+# Print what files were found
+cat("Found", length(datasets), "CSV files in", data_folder, ":\n")
+for (i in seq_along(datasets)) {
+  cat(sprintf("  %d. %s\n", i, basename(datasets[i])))
+}
+
+# Define parameters for the pipeline (unchanged)
 missing_rates <- c(0.05, 0.10, 0.15)
 methods <- c("MICE", "FAMD", "missForest", "MIDAS")
 n_clusters <- 3  # Number of clusters for evaluation
