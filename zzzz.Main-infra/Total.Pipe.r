@@ -19,6 +19,18 @@ source("Main.Pipe.r")
 source("Cluster.Pipe.r")
 
 # ----------------------------
+# 0. CREATE OUTPUT DIRECTORIES
+# ----------------------------
+
+# Create directories for organized output
+if (!dir.exists("imputation_results")) {
+  dir.create("imputation_results")
+}
+if (!dir.exists("clustering_results")) {
+  dir.create("clustering_results")
+}
+
+# ----------------------------
 # 1. DATASET CONFIGURATION
 # ----------------------------
 
@@ -56,8 +68,8 @@ for (dataset in datasets) {
     methods = methods
   )
   
-  # Save and store results
-  imputation_file <- paste0(dataset_name, "_imputation_results.csv")
+  # Save and store results in imputation_results folder
+  imputation_file <- file.path("imputation_results", paste0(dataset_name, "_imputation_results.csv"))
   write_csv(imputation_results, imputation_file)
   all_imputation_results[[dataset_name]] <- imputation_results
   cat("Saved imputation results to:", imputation_file, "\n")
@@ -74,7 +86,7 @@ for (dataset in datasets) {
     original_data_path = dataset,
     imputed_files_pattern = imputed_pattern,
     n_clusters = n_clusters,
-    output_file = paste0(dataset_name, "_clustering_results.csv")
+    output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))
   )
   
   # Store results
@@ -110,8 +122,8 @@ cat("Processed", length(datasets), "datasets:\n")
 cat(paste("-", datasets), sep = "\n")
 
 cat("\nSummary of results files:\n")
-cat("- Imputation results for each dataset: [dataset]_imputation_results.csv\n")
-cat("- Clustering results for each dataset: [dataset]_clustering_results.csv\n")
+cat("- Imputation results for each dataset: imputation_results/[dataset]_imputation_results.csv\n")
+cat("- Clustering results for each dataset: clustering_results/[dataset]_clustering_results.csv\n")
 cat("- Combined imputation results: combined_imputation_results.csv\n")
 cat("- Combined clustering results: combined_clustering_results.csv\n")
 
