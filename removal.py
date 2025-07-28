@@ -1,7 +1,7 @@
 import csv
 
-input_file = 'retail_sales_dataset.csv'
-output_file = 'retail_sales_dataset_cleaned.csv'
+input_file = 'gbsg.csv'
+output_file = 'gbsg_data.clean.csv'
 
 with open(input_file, 'r', newline='') as infile, \
      open(output_file, 'w', newline='') as outfile:
@@ -10,13 +10,13 @@ with open(input_file, 'r', newline='') as infile, \
     writer = csv.writer(outfile)
     
     headers = next(reader)  # Read header row
-    # Keep only columns starting from Gender (index 3 onward)
-    new_headers = headers[3:]
+    # Keep only columns starting from index 1 onwards
+    new_headers = headers[1:]
     writer.writerow(new_headers)
     
     for row in reader:
-        # Skip first three values (ID, Date, Customer ID)
-        cleaned_row = row[3:]
+        # Skip first value, change to index accordingly
+        cleaned_row = row[1:]
         writer.writerow(cleaned_row)
 
 print("Cleaned file saved as:", output_file)
