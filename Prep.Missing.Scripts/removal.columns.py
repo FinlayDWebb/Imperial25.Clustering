@@ -1,7 +1,7 @@
 import csv
 
-input_file = 'p.csv'
-output_file = 'parkinson_data.clean.csv'
+input_file = 'w.csv'
+output_file = 'w.1.csv'
 
 with open(input_file, 'r', newline='') as infile, \
      open(output_file, 'w', newline='') as outfile:
