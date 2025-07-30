@@ -29,7 +29,7 @@ if np.version.version >= '1.24.0':
 np.random.seed(42)
 
 def identify_variable_types(data, max_categories=20):
-    """Automatically identify variable types based on data characteristics"""
+    """Improved: Identify variable types more reliably"""
     categorical_vars = []
     continuous_vars = []
     
@@ -37,21 +37,18 @@ def identify_variable_types(data, max_categories=20):
         if data[col].isna().all():
             print(f"Warning: Column '{col}' is entirely missing, skipping...")
             continue
-            
+
         unique_vals = data[col].dropna().nunique()
         data_type = data[col].dtype
-        
-        # Check if it's already categorical (from R factor conversion)
+
+        # Only treat object/category types as categorical
         if data_type == 'object' or data_type.name == 'category':
             categorical_vars.append(col)
-            print(f"  {col}: categorical (object/category type, {unique_vals} unique values)")
-        elif unique_vals <= max_categories:
-            categorical_vars.append(col)
-            print(f"  {col}: categorical (≤{max_categories} unique values: {unique_vals})")
+            print(f"  {col}: categorical (object/category type)")
         else:
             continuous_vars.append(col)
             print(f"  {col}: continuous ({unique_vals} unique values)")
-    
+
     return categorical_vars, continuous_vars
 
 # More faithful to MIDASpy documentation:
