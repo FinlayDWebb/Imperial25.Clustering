@@ -172,23 +172,24 @@ impute_mice <- function(data) {
     completed_datasets[[i]] <- complete(imp, i)
   }
   
+  
   # Pool continuous variables using mean
   # Pool categorical variables using mode
   pooled_data <- data.frame(matrix(nrow = nrow(data), ncol = ncol(data)))
   names(pooled_data) <- names(data)
-  
+
   for (col in names(data)) {
-  if (is.numeric(data[[col]])) {
-    # ADD NA CHECK AND IMPUTATION
-    values_matrix <- sapply(completed_datasets, function(df) {
-      col_vals <- df[[col]]
-      if(any(is.na(col_vals))) {
-        # Impute with mean if NAs exist
-        col_vals[is.na(col_vals)] <- mean(col_vals, na.rm = TRUE)
-      }
-      col_vals
-    })
-    pooled_data[[col]] <- rowMeans(values_matrix)
+    if (is.numeric(data[[col]])) {
+      # Handle potential NAs in completed datasets
+      values_matrix <- sapply(completed_datasets, function(df) {
+        col_vals <- df[[col]]
+        if(any(is.na(col_vals))) {
+          # Impute with mean if NAs exist
+          col_vals[is.na(col_vals)] <- mean(col_vals, na.rm = TRUE)
+        }
+        col_vals
+      })
+      pooled_data[[col]] <- rowMeans(values_matrix, na.rm = TRUE)
     } else if (is.factor(data[[col]])) {
       # For categorical variables: use mode (most frequent) across imputations
       pooled_values <- character(nrow(data))
@@ -496,7 +497,7 @@ calculate_pfc <- function(original, imputed) {
     imp_char <- as.character(imputed[[col]])
     
     # For numeric-like factors, also try removing decimal zeros
-    if (all(grepl("^\\d+(\\.0*)?$", imp_char, na.rm = TRUE))) {
+    if (all(grepl("^\\d+(\\.0*)?$", imp_char))) {
       imp_char <- gsub("\\.0+$", "", imp_char)
     }
     
