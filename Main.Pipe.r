@@ -475,7 +475,23 @@ calculate_pfc <- function(original, imputed) {
   if (length(cat_cols) == 0) return(NA)
   
   pfc_vals <- sapply(cat_cols, function(col) {
-    mean(original[[col]] != imputed[[col]], na.rm = TRUE)
+    # Handle the prefix that MIDASpy adds
+    orig_char <- as.character(original[[col]])
+    imp_char <- as.character(imputed[[col]])
+    
+    # Remove the column name prefix if present (e.g., "workclass_Private" -> "Private")
+    imp_char <- gsub(paste0("^", col, "_"), "", imp_char)
+
+    # Convert both to character to handle 1.0 vs 1 issue
+    orig_char <- as.character(original[[col]])
+    imp_char <- as.character(imputed[[col]])
+    
+    # For numeric-like factors, also try removing decimal zeros
+    if (all(grepl("^\\d+(\\.0*)?$", imp_char, na.rm = TRUE))) {
+      imp_char <- gsub("\\.0+$", "", imp_char)
+    }
+    
+    mean(orig_char != imp_char, na.rm = TRUE)
   })
   
   mean(pfc_vals, na.rm = TRUE)

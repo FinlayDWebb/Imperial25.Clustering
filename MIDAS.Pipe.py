@@ -54,26 +54,13 @@ def identify_variable_types(data, max_categories=20):
     
     return categorical_vars, continuous_vars
 
+# More faithful to MIDASpy documentation:
 def preprocess_data(data, categorical_vars):
-    """Preprocess data with proper scaling"""
+    """Preprocess data following MIDASpy documentation exactly"""
     data_copy = data.copy()
     continuous_vars = [col for col in data.columns if col not in categorical_vars]
     
-    # Initialize scaler
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    
-    # Normalize continuous variables
-    if continuous_vars:
-        print(f"Scaling continuous variables: {continuous_vars}")
-        # Only scale columns that have variance
-        for col in continuous_vars:
-            col_data = data_copy[col].dropna()
-            if len(col_data) > 1 and col_data.var() > 0:
-                data_copy[col] = scaler.fit_transform(data_copy[[col]])
-            else:
-                print(f"Warning: Column '{col}' has no variance, skipping scaling")
-    
-    # One-hot encode categoricals
+    # One-hot encode categoricals using MIDASpy's method
     cat_cols_list = []
     if categorical_vars:
         print(f"One-hot encoding categorical variables: {categorical_vars}")
@@ -83,65 +70,52 @@ def preprocess_data(data, categorical_vars):
         
         data_cat, cat_cols_list = md.cat_conv(data_copy[categorical_vars])
         data_copy.drop(categorical_vars, axis=1, inplace=True)
-        data_processed = pd.concat([data_copy, data_cat], axis=1)
+        constructor_list = [data_copy]
+        constructor_list.append(data_cat)
+        data_processed = pd.concat(constructor_list, axis=1)
         print(f"Created {len([col for cols in cat_cols_list for col in cols])} one-hot columns")
     else:
         data_processed = data_copy
         print("No categorical variables to encode")
     
-    # Replace NaN values
+    # Replace NaN values as per documentation
     na_loc = data_processed.isnull()
     data_processed[na_loc] = np.nan
     
-    return data_processed, cat_cols_list, scaler, continuous_vars
+    # Return without scaler since we're not scaling
+    return data_processed, cat_cols_list, continuous_vars
+
 
 def convert_categorical_back(imputations, cat_cols_list, categorical_vars):
-    """Convert one-hot encoded variables back to original categories"""
+    """Convert one-hot encoded variables back using the documented method"""
     if not categorical_vars or not cat_cols_list:
         return imputations
     
-    print("Converting one-hot encoded variables back to categories...")
+    print("Converting one-hot encoded variables back to categories (documented method)...")
     
-    # Create mapping from one-hot columns to original categories
-    category_mapping = {}
-    for var, cols in zip(categorical_vars, cat_cols_list):
-        for col in cols:
-            # Extract category name (remove variable prefix)
-            if '_' in col and col.startswith(var + '_'):
-                category = col[len(var) + 1:]  # Remove "varname_" prefix
-            else:
-                category = col  # Fallback if no expected prefix
-            category_mapping[col] = (var, category)
+    # Flatten all categorical columns as per documentation
+    flat_cats = [cat for variable in cat_cols_list for cat in variable]
     
     for i in range(len(imputations)):
-        # Create DataFrame for reconstructed categoricals
-        cat_data = pd.DataFrame(index=imputations[i].index)
-        
-        for orig_var in categorical_vars:
-            # Get all columns for this categorical variable
-            var_cols = [col for col in imputations[i].columns 
-                       if col in category_mapping and category_mapping[col][0] == orig_var]
+        try:
+            # Use idxmax for each categorical variable as per documentation
+            tmp_cat = [imputations[i][x].idxmax(axis=1) for x in cat_cols_list]
             
-            if var_cols:
-                # Find most probable category for each row
-                cat_series = imputations[i][var_cols].idxmax(axis=1)
-                # Map to original category names
-                cat_series = cat_series.map(lambda x: category_mapping[x][1] if x in category_mapping else 'Unknown')
-                cat_data[orig_var] = cat_series
-            else:
-                print(f"Warning: No columns found for categorical variable '{orig_var}'")
-                cat_data[orig_var] = 'Unknown'
-                
-        # Remove one-hot columns
-        flat_cats = [col for cols in cat_cols_list for col in cols]
-        imputations[i] = imputations[i].drop(flat_cats, axis=1)
-        
-        # Add reconstructed categoricals
-        imputations[i] = pd.concat([imputations[i], cat_data], axis=1)
+            # Create DataFrame with original categorical names
+            cat_df = pd.DataFrame({categorical_vars[j]: tmp_cat[j] for j in range(len(categorical_vars))})
+            
+            # Concatenate and drop one-hot columns
+            imputations[i] = pd.concat([imputations[i], cat_df], axis=1).drop(flat_cats, axis=1)
+            
+        except Exception as e:
+            print(f"Warning: Error converting categoricals in dataset {i+1}: {e}")
+            # Fallback: keep the one-hot encoded version
+            continue
     
     return imputations
 
-def reverse_scaling(imputations, scaler, continuous_vars):
+
+# def reverse_scaling(imputations, scaler, continuous_vars):
     """Reverse min-max scaling for continuous variables"""
     if not continuous_vars:
         return imputations
@@ -215,8 +189,7 @@ def impute_dataset(input_file, output_prefix, m=5, layer_structure=[256, 256],
     # Preprocess with scaling
     print("\nPreprocessing data...")
     try:
-        data_processed, cat_cols_list, scaler, continuous_vars = preprocess_data(
-            data, categorical_vars)
+        data_processed, cat_cols_list, continuous_vars = preprocess_data(data, categorical_vars)
         print(f"Preprocessed data shape: {data_processed.shape}")
     except Exception as e:
         print(f"Error in preprocessing: {e}")
@@ -250,9 +223,8 @@ def impute_dataset(input_file, output_prefix, m=5, layer_structure=[256, 256],
             print("\nConverting categorical variables back...")
             imputations = convert_categorical_back(imputations, cat_cols_list, categorical_vars)
         
-        if continuous_vars:
-            print("Reversing scaling...")
-            imputations = reverse_scaling(imputations, scaler, continuous_vars)
+        # No scaling reversal needed since we didn't scale
+        
     except Exception as e:
         print(f"Error in post-processing: {e}")
         return None
