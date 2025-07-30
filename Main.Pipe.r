@@ -178,10 +178,17 @@ impute_mice <- function(data) {
   names(pooled_data) <- names(data)
   
   for (col in names(data)) {
-    if (is.numeric(data[[col]])) {
-      # For continuous variables: average across imputations
-      values_matrix <- sapply(completed_datasets, function(df) df[[col]])
-      pooled_data[[col]] <- rowMeans(values_matrix, na.rm = TRUE)
+  if (is.numeric(data[[col]])) {
+    # ADD NA CHECK AND IMPUTATION
+    values_matrix <- sapply(completed_datasets, function(df) {
+      col_vals <- df[[col]]
+      if(any(is.na(col_vals))) {
+        # Impute with mean if NAs exist
+        col_vals[is.na(col_vals)] <- mean(col_vals, na.rm = TRUE)
+      }
+      col_vals
+    })
+    pooled_data[[col]] <- rowMeans(values_matrix)
     } else if (is.factor(data[[col]])) {
       # For categorical variables: use mode (most frequent) across imputations
       pooled_values <- character(nrow(data))
@@ -470,7 +477,9 @@ calculate_pfc <- function(original, imputed) {
   #' @param imputed Imputed dataframe
   #' @return Mean PFC across categorical columns
   
-  cat_cols <- names(original)[sapply(original, is.factor)]
+    cat_cols <- names(original)[sapply(original, function(x) {
+    is.factor(x) || (is.numeric(x) && length(unique(x)) <= 10)
+  })]
   
   if (length(cat_cols) == 0) return(NA)
   

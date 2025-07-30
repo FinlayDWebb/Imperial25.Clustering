@@ -85,8 +85,17 @@ def preprocess_data(data, categorical_vars):
 
 def convert_categorical_back(imputations, cat_cols_list, categorical_vars):
     """Convert one-hot encoded variables back using the documented method"""
+    
+    # In convert_categorical_back()
     if not categorical_vars or not cat_cols_list:
-        return imputations
+        return imputations  # Skip conversion if no categoricals
+
+    # Add type check before conversion
+    for i in range(len(imputations)):
+        for col in categorical_vars:
+            if imputations[i][col].dtype.kind not in 'iuf':  # Check if numeric
+                # Skip non-numeric columns (shouldn't be categorical)
+                continue
     
     print("Converting one-hot encoded variables back to categories (documented method)...")
     
