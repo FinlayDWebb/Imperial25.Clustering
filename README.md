@@ -10,3 +10,4 @@ TBD
     On the report, datasets section nearly done.
     Must also add, restraints and problems that we adapted around (categorical, DIB bug, auto categorical detector?)
     Then results and conclusion, this goes hand-in-hand with 3.
+    Oh, and the bibliography.
