@@ -50,11 +50,10 @@ identify_column_types <- function(data) {
       unique_vals <- length(unique(col[!is.na(col)]))
       total_vals <- sum(!is.na(col))
       
-      if (unique_vals <= 10 || (total_vals > 0 && unique_vals / total_vals < 0.05)) {
-        # Convert to factor and treat as categorical
-        data[[i]] <- as.factor(col)
-        cat_cols <- c(cat_cols, i)
-        cat(sprintf("Column %d (%s): Converted to categorical (%d unique values)\n", 
+    if (all(col %% 1 == 0) && (unique_vals <= 10 || unique_vals/total_vals < 0.05)) {
+      data[[i]] <- factor(col, levels = sort(unique(col)))
+      cat_cols <- c(cat_cols, i)
+      cat(sprintf("Column %d (%s): Converted to categorical with explicit levels (%d unique values)\n",
                     i, col_name, unique_vals))
       } else {
         cont_cols <- c(cont_cols, i)
@@ -71,7 +70,7 @@ identify_column_types <- function(data) {
   ))
 }
 
-perform_dibmix_clustering <- function(data, n_clusters = 3) {
+perform_dibmix_clustering <- function(data, n_clusters = 2) {
   #' Perform DIBmix clustering on mixed-type data
   #' 
   #' @param data Dataframe to cluster
@@ -94,7 +93,13 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
     # Ensure categorical columns are factors
     if (length(cat_cols) > 0) {
       data_processed[, cat_cols] <- lapply(data_processed[, cat_cols, drop = FALSE], function(x) {
-        if(!is.factor(x)) as.factor(x) else x
+        if(is.factor(x)) {
+          # Ensure factors have consistent levels
+          factor(x, levels = levels(x))
+        } else {
+          # For character columns, convert to factor with sorted unique values
+          factor(x, levels = sort(unique(x)))
+        }
       })
     }
     

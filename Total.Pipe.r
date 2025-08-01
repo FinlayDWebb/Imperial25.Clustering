@@ -62,8 +62,8 @@ for (i in seq_along(datasets)) {
 }
 
 # Define parameters for the pipeline (unchanged)
-missing_rates <- c(0.05, 0.10, 0.15)
-methods <- c("MICE", "FAMD", "missForest", "MIDAS")
+missing_rates <- c(0.05) # 0.10, 0.15
+methods <- c("MIDAS") # "MICE", "FAMD", "missForest", 
 n_clusters <- 2  # Number of clusters for evaluation, stick with 2 for simplicity.
 
 # ----------------------------
