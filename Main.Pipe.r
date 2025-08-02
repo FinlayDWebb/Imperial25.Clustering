@@ -227,46 +227,33 @@ impute_mice <- function(data) {
 impute_famd <- function(data, ncp = 10) {
   set.seed(42)
   
-  # 1. Convert only categorical columns to factors
-  data <- as.data.frame(lapply(data, function(x) {
-    if (is.character(x) || is.logical(x) || (is.numeric(x) && length(unique(x)) <= 10)) {
-      factor(x)
-    } else {
-      x
-    }
-  }))
+  # Store original factor levels
+  factor_levels <- lapply(data, function(x) if(is.factor(x)) levels(x) else NULL)
   
-  # 2. Store original levels
-  factor_levels <- lapply(data, function(x) if (is.factor(x)) levels(x) else NULL)
+  # Convert only character columns to factors
+  char_cols <- sapply(data, is.character)
+  if(any(char_cols)) {
+    data[char_cols] <- lapply(data[char_cols], as.factor)
+  }
   
   tryCatch({
-    # 3. Perform imputation
+    # Perform imputation
     imp <- missMDA::imputeFAMD(data, ncp = ncp)$completeObs
     
-    # 4. Convert probability vectors back to categories
+    # Convert back to original types
     for (col in names(data)) {
-      if (is.factor(data[[col]])) {
-        # Find probability columns (they start with colname + ".")
+      if (!is.null(factor_levels[[col]])) {
+        # Convert probabilities to categories
         prob_cols <- grep(paste0("^", col, "\\."), names(imp), value = TRUE)
-        
         if (length(prob_cols) > 0) {
-          # Get probability matrix
           probs <- as.matrix(imp[, prob_cols])
-          
-          # Assign category with highest probability
           max_cat <- apply(probs, 1, which.max)
           imp[[col]] <- factor_levels[[col]][max_cat]
         }
-      }
-    }
-    
-    # 5. CRITICAL FIX: Convert back to factors with original levels
-    for (col in names(data)) {
-      if (is.factor(data[[col]])) {
+        # Ensure factor type
         imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
       }
     }
-    
     return(imp)
   }, error = function(e) {
     message("FAMD failed: ", e$message)
@@ -520,6 +507,18 @@ run_imputation_pipeline <- function(data_path,
 
   # 1. Preprocess data
   clean_data <- preprocess_data(data_path)
+
+  # Add type enforcement after imputation
+  for (method in methods) {
+    # ... existing imputation code ...
+    
+    if (!is.null(imputed_data)) {
+      # Enforce original types before saving
+      imputed_data <- enforce_original_types(imputed_data, clean_data)
+      write_csv(imputed_data, output_filename)
+    }
+  }
+
   
   # Initialize results
   results <- data.frame()

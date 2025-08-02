@@ -29,7 +29,7 @@ if (!require(mclust, quietly = TRUE)) {
 # ----------------------------
 
 identify_column_types <- function(data) {
-  #' Automatically identify categorical and continuous columns for DIBmix
+  #' Identify column types WITHOUT converting existing factors
   #' 
   #' @param data Dataframe to analyze
   #' @return List with categorical and continuous column indices
@@ -41,25 +41,40 @@ identify_column_types <- function(data) {
     col <- data[[i]]
     col_name <- names(data)[i]
     
-    if (is.factor(col) || is.character(col)) {
+    # Preserve existing factor columns
+    if (is.factor(col)) {
       cat_cols <- c(cat_cols, i)
-      cat(sprintf("Column %d (%s): Categorical (%d levels)\n", 
-                  i, col_name, length(unique(col[!is.na(col)]))))
-    } else if (is.numeric(col)) {
-      # Check if it's discrete (likely categorical) or continuous
+      cat(sprintf("Column %d (%s): Preserved as factor (%d levels)\n", 
+                  i, col_name, nlevels(col)))
+    } 
+    # Convert character columns to factors
+    else if (is.character(col)) {
+      data[[i]] <- factor(col)
+      cat_cols <- c(cat_cols, i)
+      cat(sprintf("Column %d (%s): Character converted to factor (%d levels)\n",
+                  i, col_name, length(unique(col))))
+    }
+    # Handle numeric columns
+    else if (is.numeric(col)) {
       unique_vals <- length(unique(col[!is.na(col)]))
-      total_vals <- sum(!is.na(col))
       
-    if (all(col %% 1 == 0) && (unique_vals <= 10 || unique_vals/total_vals < 0.05)) {
-      data[[i]] <- factor(col, levels = sort(unique(col)))
-      cat_cols <- c(cat_cols, i)
-      cat(sprintf("Column %d (%s): Converted to categorical with explicit levels (%d unique values)\n",
+      # Convert to factor if low cardinality
+      if (all(col %% 1 == 0) && (unique_vals <= 10 || unique_vals/total_vals < 0.05)) {
+        data[[i]] <- factor(col, levels = sort(unique(col)))
+        cat_cols <- c(cat_cols, i)
+        cat(sprintf("Column %d (%s): Numeric converted to factor (%d unique values)\n",
                     i, col_name, unique_vals))
       } else {
         cont_cols <- c(cont_cols, i)
         cat(sprintf("Column %d (%s): Continuous (%d unique values)\n", 
                     i, col_name, unique_vals))
       }
+    }
+    # Preserve logical columns as categorical
+    else if (is.logical(col)) {
+      cat_cols <- c(cat_cols, i)
+      cat(sprintf("Column %d (%s): Logical treated as categorical\n", 
+                  i, col_name))
     }
   }
   
@@ -68,6 +83,25 @@ identify_column_types <- function(data) {
     categorical = cat_cols, 
     continuous = cont_cols
   ))
+}
+
+enforce_original_types <- function(data, reference) {
+  #' Enforce original data types from reference dataset
+  #' 
+  #' @param data Data to modify
+  #' @param reference Reference dataset with correct types
+  #' @return Data with corrected types
+  
+  for (col_name in names(data)) {
+    if (col_name %in% names(reference)) {
+      if (is.factor(reference[[col_name]])) {
+        data[[col_name]] <- factor(data[[col_name]], levels = levels(reference[[col_name]]))
+      } else if (is.numeric(reference[[col_name]])) {
+        data[[col_name]] <- as.numeric(data[[col_name]])
+      }
+    }
+  }
+  return(data)
 }
 
 perform_dibmix_clustering <- function(data, n_clusters = 2) {
@@ -206,6 +240,9 @@ evaluate_clustering_performance <- function(original_data_path,
   # Step 5: Load and cluster original dataset
   cat("\nStep 5: Clustering original dataset...\n")
   original_data <- read_csv(original_data_path, show_col_types = FALSE)
+  
+  # Store original types for enforcement
+  original_types <- lapply(original_data, class)
   cat(sprintf("Original data dimensions: %d x %d\n", nrow(original_data), ncol(original_data)))
   
   original_clustering <- perform_dibmix_clustering(original_data, n_clusters)
@@ -262,6 +299,9 @@ evaluate_clustering_performance <- function(original_data_path,
   tryCatch({
       # Step 6: Load imputed dataset
       imputed_data <- read_csv(imputed_file, show_col_types = FALSE)
+
+      # ENFORCE ORIGINAL TYPES
+      imputed_data <- enforce_original_types(imputed_data, original_data)
       cat(sprintf("Imputed data dimensions: %d x %d\n", nrow(imputed_data), ncol(imputed_data)))
       
       # Ensure row count matches original
