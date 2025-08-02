@@ -507,18 +507,6 @@ run_imputation_pipeline <- function(data_path,
 
   # 1. Preprocess data
   clean_data <- preprocess_data(data_path)
-
-  # Add type enforcement after imputation
-  for (method in methods) {
-    # ... existing imputation code ...
-    
-    if (!is.null(imputed_data)) {
-      # Enforce original types before saving
-      imputed_data <- enforce_original_types(imputed_data, clean_data)
-      write_csv(imputed_data, output_filename)
-    }
-  }
-
   
   # Initialize results
   results <- data.frame()
@@ -581,7 +569,10 @@ run_imputation_pipeline <- function(data_path,
         next
       }
 
-      # Save the imputed dataset to CSV ***
+      # Enforce original types before saving
+      imputed_data <- enforce_original_types(imputed_data, clean_data)
+      
+      # Save the imputed dataset to CSV
       output_filename <- sprintf("%s_%s_%.2f_imputed.csv", base_name, tolower(method), rate)
       write_csv(imputed_data, output_filename)
       cat("Saved imputed data to:", output_filename, "\n")
@@ -618,5 +609,26 @@ run_imputation_pipeline <- function(data_path,
   
   return(results)
 }
+
+# Add enforce_original_types to Main.Pipe.r
+enforce_original_types <- function(data, reference) {
+  #' Enforce original data types from reference dataset
+  #' 
+  #' @param data Data to modify
+  #' @param reference Reference dataset with correct types
+  #' @return Data with corrected types
+  
+  for (col_name in names(data)) {
+    if (col_name %in% names(reference)) {
+      if (is.factor(reference[[col_name]])) {
+        data[[col_name]] <- factor(data[[col_name]], levels = levels(reference[[col_name]]))
+      } else if (is.numeric(reference[[col_name]])) {
+        data[[col_name]] <- as.numeric(data[[col_name]])
+      }
+    }
+  }
+  return(data)
+}
+
 
 # This is executed by Total.Pipe.r
