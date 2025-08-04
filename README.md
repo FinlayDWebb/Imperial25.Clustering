@@ -14,3 +14,4 @@ TBD
 
 
 - I'm thinking of just choosing the datasets, and preparing the scripts specifically for those datasets, not this automatic pre-processing stuff. I'll try to do this today.
+- I have the datasets, just need to do metadata, and remove automatic type checking.
