@@ -13,5 +13,5 @@ TBD
     Oh, and the bibliography.
 
 
-- I'm thinking of just choosing the datasets, and preparing the scripts specifically for those datasets, not this automatic pre-processing stuff. I'll try to do this today.
 - I have the datasets, just need to do metadata, and remove automatic type checking.
+- I've done the metadata, now its just time to tune the scripts so that I can send it off to Efthymios, I have to double check that the MICE missingness fix (I.e. after imputation, using mode/mean) is a valid method. It might ruin RMSE.
