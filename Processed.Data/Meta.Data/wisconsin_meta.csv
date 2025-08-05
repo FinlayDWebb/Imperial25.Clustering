@@ -1,0 +1,32 @@
+variable,type,levels,description,source
+Diagnosis,binary,"B, M","Diagnosis (B=benign, M=malignant) (target)",UCI  
+radius1,numeric,,Mean radius,UCI  
+texture1,numeric,,Mean texture,UCI  
+perimeter1,numeric,,Mean perimeter,UCI  
+area1,numeric,,Mean area,UCI  
+smoothness1,numeric,,Mean smoothness,UCI  
+compactness1,numeric,,Mean compactness,UCI  
+concavity1,numeric,,Mean concavity,UCI  
+concave_points1,numeric,,Mean concave points,UCI  
+symmetry1,numeric,,Mean symmetry,UCI  
+fractal_dimension1,numeric,,Mean fractal dimension,UCI  
+radius2,numeric,,Radius standard error,UCI  
+texture2,numeric,,Texture standard error,UCI  
+perimeter2,numeric,,Perimeter standard error,UCI  
+area2,numeric,,Area standard error,UCI  
+smoothness2,numeric,,Smoothness standard error,UCI  
+compactness2,numeric,,Compactness standard error,UCI  
+concavity2,numeric,,Concavity standard error,UCI  
+concave_points2,numeric,,Concave points standard error,UCI  
+symmetry2,numeric,,Symmetry standard error,UCI  
+fractal_dimension2,numeric,,Fractal dimension standard error,UCI  
+radius3,numeric,,Worst radius,UCI  
+texture3,numeric,,Worst texture,UCI  
+perimeter3,numeric,,Worst perimeter,UCI  
+area3,numeric,,Worst area,UCI  
+smoothness3,numeric,,Worst smoothness,UCI  
+compactness3,numeric,,Worst compactness,UCI  
+concavity3,numeric,,Worst concavity,UCI  
+concave_points3,numeric,,Worst concave points,UCI  
+symmetry3,numeric,,Worst symmetry,UCI  
+fractal_dimension3,numeric,,Worst fractal dimension,UCI  

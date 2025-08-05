@@ -1,0 +1,14 @@
+variable,type,levels,description,source
+Category,categorical,"0=Blood Donor, 0s=suspect Blood Donor, 1=Hepatitis, 2=Fibrosis, 3=Cirrhosis","Diagnosis category (target)",Kaggle  
+Age,numeric,,Age in years,Kaggle  
+Sex,categorical,"f, m",Gender,Kaggle  
+ALB,numeric,,Albumin,Kaggle  
+ALP,numeric,,Alkaline phosphatase,Kaggle  
+ALT,numeric,,Alanine transaminase,Kaggle  
+AST,numeric,,Aspartate transaminase,Kaggle  
+BIL,numeric,,Bilirubin,Kaggle  
+CHE,numeric,,Cholinesterase,Kaggle  
+CHOL,numeric,,Cholesterol,Kaggle  
+CREA,numeric,,Creatinine,Kaggle  
+GGT,numeric,,Gamma-glutamyl transferase,Kaggle  
+PROT,numeric,,Total protein,Kaggle  

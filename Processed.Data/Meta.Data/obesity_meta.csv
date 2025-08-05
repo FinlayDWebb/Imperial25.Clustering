@@ -1,0 +1,18 @@
+variable,type,levels,description,source
+Gender,categorical,"Male, Female",Gender,Kaggle  
+Age,numeric,,Age in years,Kaggle  
+Height,numeric,,Height in meters,Kaggle  
+Weight,numeric,,Weight in kilograms,Kaggle  
+family_history_with_overweight,binary,"yes, no","Family history of overweight",Kaggle  
+FAVC,binary,"yes, no","Frequent consumption of high caloric food",Kaggle  
+FCVC,ordered,"1, 2, 3","Frequency of vegetable consumption (1=never, 3=always)",Kaggle  
+NCP,numeric,,Number of main meals,Kaggle  
+CAEC,categorical,"no, Sometimes, Frequently, Always","Eating between meals",Kaggle  
+SMOKE,binary,"yes, no","Smoking habit",Kaggle  
+CH2O,numeric,,Daily water consumption,Kaggle  
+SCC,binary,"yes, no","Calorie intake monitoring",Kaggle  
+FAF,numeric,,Physical activity frequency,Kaggle  
+TUE,ordered,"0, 1, 2","Technology usage time (0=low, 2=high)",Kaggle  
+CALC,categorical,"no, Sometimes, Frequently, Always","Alcohol consumption",Kaggle  
+MTRANS,categorical,"Automobile, Motorbike, Bike, Public_Transportation, Walking","Transportation method",Kaggle  
+NObeyesdad,ordered,"Insufficient_Weight, Normal_Weight Overweight_Level_I, Overweight_Level_II, Obesity_Level_I, Obesity_Level_II, Obesity_Level_III","Obesity level (target)",Kaggle  
