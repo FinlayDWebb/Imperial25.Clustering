@@ -16,26 +16,32 @@ library(tidyr)
 # 1. DATA PREPROCESSING
 # ----------------------------
 
-preprocess_data <- function(file_path) {
-  #' Cleans and prepares raw data for analysis (more robust version)
-  #'
-  #' @param file_path Path to raw data file
-  #' @return Cleaned dataframe with proper data types
+preprocess_data <- function(file_path, metadata_path) {
+  # Read data and metadata
+  data <- read_csv(file_path, na = c("", "NA", "?"), show_col_types = FALSE)
+  metadata <- read_csv(metadata_path, show_col_types = FALSE)
   
-  # Read data treating "?" as missing from the start
-  data <- read_csv(file_path, 
-                   na = c("", "NA", "?"),  # Handle "?" during reading
-                   show_col_types = FALSE)
+  # Apply types from metadata
+  for (col in names(data)) {
+    meta <- metadata %>% filter(variable == col)
+    if (nrow(meta) == 0) next
+    
+    if (meta$type == "numeric") {
+      data[[col]] <- as.numeric(data[[col]])
+    } 
+    else if (meta$type == "ordered") {
+      levels <- unlist(strsplit(meta$levels, ","))
+      data[[col]] <- ordered(data[[col]], levels = levels)
+    }
+    else if (meta$type == "categorical") {
+      levels <- unlist(strsplit(meta$levels, ","))
+      data[[col]] <- factor(data[[col]], levels = levels)
+    }
+  }
   
-  # Basic cleaning operations
+  # Basic cleaning
   clean_data <- data %>%
-    # Remove leading/trailing whitespace from character columns
-    mutate(across(where(is.character), trimws)) %>%
-    # Convert character columns to factors
-    mutate(across(where(is.character), as.factor))
-  
-  cat("Data preprocessing complete\n")
-  cat("Dimensions:", dim(clean_data), "\n")
+    mutate(across(where(is.character), trimws))
   
   return(clean_data)
 }
@@ -505,8 +511,8 @@ run_imputation_pipeline <- function(data_path,
   # Extract dataset name for file prefixes
   base_name <- tools::file_path_sans_ext(basename(data_path))
 
-  # 1. Preprocess data
-  clean_data <- preprocess_data(data_path)
+  # 1. Preprocess data WITH METADATA
+  clean_data <- preprocess_data(data_path, metadata_path)  # PASS metadata_path
   
   # Initialize results
   results <- data.frame()

@@ -76,6 +76,15 @@ all_clustering_results <- list()
 
 for (dataset in datasets) {
   dataset_name <- file_path_sans_ext(basename(dataset))
+
+  # Construct metadata path (assumes metadata files are named dataset_name.meta.csv)
+  metadata_path <- file.path(data_folder, paste0(dataset_name, ".meta.csv"))
+  
+  # Verify metadata exists
+  if (!file.exists(metadata_path)) {
+    stop("Metadata file not found: ", metadata_path)
+  }
+
   cat("\n\n", rep("=", 60), "\n", sep="")
   cat("STARTING PIPELINE FOR DATASET:", dataset, "\n")
   cat(rep("=", 60), "\n\n", sep="")
@@ -86,6 +95,7 @@ for (dataset in datasets) {
   cat(">>> RUNNING IMPUTATION PIPELINE\n")
   imputation_results <- run_imputation_pipeline(
     data_path = dataset,
+    metadata_path = metadata_path,  # Pass metadata path
     missing_rates = missing_rates,
     methods = methods
   )
@@ -106,6 +116,7 @@ for (dataset in datasets) {
   
   clustering_results <- evaluate_clustering_performance(
     original_data_path = dataset,
+    metadata_path = metadata_path,  # Pass metadata path  
     imputed_files_pattern = imputed_pattern,
     n_clusters = n_clusters,
     output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))

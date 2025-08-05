@@ -28,61 +28,29 @@ if (!require(mclust, quietly = TRUE)) {
 # HELPER FUNCTIONS
 # ----------------------------
 
-identify_column_types <- function(data) {
-  #' Identify column types WITHOUT converting existing factors
-  #' 
-  #' @param data Dataframe to analyze
-  #' @return List with categorical and continuous column indices
+run_imputation_pipeline <- function(data_path, metadata_path, ...) {
+  # ...
+  clean_data <- preprocess_data(data_path, metadata_path)
+  # ...
+}
+
+# In main loop:
+for (dataset in datasets) {
+  dataset_name <- tools::file_path_sans_ext(basename(dataset))
+  metadata_path <- file.path("Processed.Data", paste0(dataset_name, ".meta.csv"))
   
-  cat_cols <- c()
-  cont_cols <- c()
+  # Run pipelines with metadata
+  imputation_results <- run_imputation_pipeline(
+    data_path = dataset,
+    metadata_path = metadata_path,
+    ...
+  )
   
-  for (i in 1:ncol(data)) {
-    col <- data[[i]]
-    col_name <- names(data)[i]
-    
-    # Preserve existing factor columns
-    if (is.factor(col)) {
-      cat_cols <- c(cat_cols, i)
-      cat(sprintf("Column %d (%s): Preserved as factor (%d levels)\n", 
-                  i, col_name, nlevels(col)))
-    } 
-    # Convert character columns to factors
-    else if (is.character(col)) {
-      data[[i]] <- factor(col)
-      cat_cols <- c(cat_cols, i)
-      cat(sprintf("Column %d (%s): Character converted to factor (%d levels)\n",
-                  i, col_name, length(unique(col))))
-    }
-    # Handle numeric columns
-    else if (is.numeric(col)) {
-      unique_vals <- length(unique(col[!is.na(col)]))
-      
-      # Convert to factor if low cardinality
-      if (all(col %% 1 == 0) && (unique_vals <= 10 || unique_vals/total_vals < 0.05)) {
-        data[[i]] <- factor(col, levels = sort(unique(col)))
-        cat_cols <- c(cat_cols, i)
-        cat(sprintf("Column %d (%s): Numeric converted to factor (%d unique values)\n",
-                    i, col_name, unique_vals))
-      } else {
-        cont_cols <- c(cont_cols, i)
-        cat(sprintf("Column %d (%s): Continuous (%d unique values)\n", 
-                    i, col_name, unique_vals))
-      }
-    }
-    # Preserve logical columns as categorical
-    else if (is.logical(col)) {
-      cat_cols <- c(cat_cols, i)
-      cat(sprintf("Column %d (%s): Logical treated as categorical\n", 
-                  i, col_name))
-    }
-  }
-  
-  return(list(
-    data = data,
-    categorical = cat_cols, 
-    continuous = cont_cols
-  ))
+  clustering_results <- evaluate_clustering_performance(
+    original_data_path = dataset,
+    metadata_path = metadata_path,
+    ...
+  )
 }
 
 enforce_original_types <- function(data, reference) {
@@ -104,16 +72,58 @@ enforce_original_types <- function(data, reference) {
   return(data)
 }
 
-perform_dibmix_clustering <- function(data, n_clusters = 2) {
+identify_column_types <- function(data, metadata_path) {
+  #' Identify column types USING METADATA
+  #' 
+  #' @param data Dataframe to analyze
+  #' @param metadata_path Path to metadata CSV
+  #' @return List with categorical and continuous column indices
+  
+  # Read metadata
+  metadata <- read_csv(metadata_path, show_col_types = FALSE)
+  
+  cat_cols <- c()
+  cont_cols <- c()
+  
+  for (i in 1:ncol(data)) {
+    col_name <- names(data)[i]
+    meta <- metadata %>% filter(variable == col_name)
+    
+    if (nrow(meta) == 0) {
+      cat(sprintf("Warning: No metadata for column '%s'. Skipping.\n", col_name))
+      next
+    }
+    
+    if (meta$type %in% c("categorical", "ordered")) {
+      cat_cols <- c(cat_cols, i)
+      cat(sprintf("Column %d (%s): Categorical (from metadata)\n", 
+                 i, col_name))
+    } 
+    else if (meta$type == "numeric") {
+      cont_cols <- c(cont_cols, i)
+      cat(sprintf("Column %d (%s): Continuous (from metadata)\n", 
+                 i, col_name))
+    }
+  }
+  
+  return(list(
+    data = data,
+    categorical = cat_cols,
+    continuous = cont_cols
+  ))
+}
+
+perform_dibmix_clustering <- function(data, n_clusters = 2, metadata_path) {  # ADD metadata_path
   #' Perform DIBmix clustering on mixed-type data
   #' 
   #' @param data Dataframe to cluster
   #' @param n_clusters Number of clusters
+  #' @param metadata_path Path to type metadata
   #' @return DIBmix clustering results
   
   tryCatch({
-    # Identify column types
-    col_info <- identify_column_types(data)
+    # Identify column types USING METADATA
+    col_info <- identify_column_types(data, metadata_path)  # PASS metadata_path
     data_processed <- col_info$data
     cat_cols <- col_info$categorical
     cont_cols <- col_info$continuous
@@ -231,6 +241,7 @@ calculate_ari <- function(true_clusters, pred_clusters) {
 #################
 
 evaluate_clustering_performance <- function(original_data_path,
+                                           metadata_path,  # ADD THIS PARAM
                                            imputed_files_pattern = NULL,
                                            imputed_files_list = NULL,
                                            n_clusters = 3,
@@ -240,6 +251,13 @@ evaluate_clustering_performance <- function(original_data_path,
   # Step 5: Load and cluster original dataset
   cat("\nStep 5: Clustering original dataset...\n")
   original_data <- read_csv(original_data_path, show_col_types = FALSE)
+
+  # Cluster WITH METADATA
+  original_clustering <- perform_dibmix_clustering(
+    original_data, 
+    n_clusters,
+    metadata_path  # PASS METADATA
+  )
   
   # Store original types for enforcement
   original_types <- lapply(original_data, class)

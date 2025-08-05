@@ -38,3 +38,4 @@ if __name__ == "__main__":
     print(f"Original rows: {total}")
     print(f"Clean rows: {clean}")
     print(f"Rows removed: {removed}")
+

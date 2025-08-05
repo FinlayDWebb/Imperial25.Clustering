@@ -28,28 +28,27 @@ if np.version.version >= '1.24.0':
 # Set random seed for reproducibility
 np.random.seed(42)
 
-def identify_variable_types(data, max_categories=20):
-    """Improved: Identify variable types more reliably"""
+def identify_variable_types(data, metadata_path):
+    metadata = pd.read_csv(metadata_path)
     categorical_vars = []
     continuous_vars = []
     
-    for col in data.columns:
-        if data[col].isna().all():
-            print(f"Warning: Column '{col}' is entirely missing, skipping...")
+    for _, row in metadata.iterrows():
+        col = row['variable']
+        if col not in data.columns:
             continue
-
-        unique_vals = data[col].dropna().nunique()
-        data_type = data[col].dtype
-
-        # Only treat object/category types as categorical
-        if data_type == 'object' or data_type.name == 'category':
+            
+        if row['type'] in ['categorical', 'ordered']:
             categorical_vars.append(col)
-            print(f"  {col}: categorical (object/category type)")
-        else:
+            print(f"  {col}: Categorical ({row['type']})")
+        elif row['type'] == 'numeric':
             continuous_vars.append(col)
-            print(f"  {col}: continuous ({unique_vals} unique values)")
-
+            print(f"  {col}: Continuous")
+    
     return categorical_vars, continuous_vars
+
+# In impute_dataset function:
+categorical_vars, continuous_vars = identify_variable_types(data, metadata_path)
 
 def preprocess_data(data, categorical_vars):
     """Preprocess data following MIDASpy documentation exactly"""
