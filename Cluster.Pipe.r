@@ -47,10 +47,12 @@ for (dataset in datasets) {
     ...
   )
   
-  clustering_results <- evaluate_clustering_performance(
+clustering_results <- evaluate_clustering_performance(
     original_data_path = dataset,
-    metadata_path = metadata_path,
-    ...
+    metadata_path = metadata_path,  # This now points to Processed.Metadata folder
+    imputed_files_pattern = imputed_pattern,
+    n_clusters = n_clusters,
+    output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))
   )
 }
 }
@@ -85,9 +87,12 @@ identify_column_types <- function(data, metadata_path) {
   metadata <- read_csv(metadata_path, show_col_types = FALSE)
 
   # Debug printouts
-  cat("Metadata columns in clustering:", names(metadata), "\n")
-  if(nrow(metadata) > 0) cat("First row:", as.list(metadata[1, ]), "\n")
-  
+  cat("Metadata columns:", names(metadata), "\n")
+  if (nrow(metadata) > 0) {
+    cat("First row values:\n")
+    print(metadata[1, ])  # Use print() for data frames
+  }
+
   cat_cols <- c()
   cont_cols <- c()
   
@@ -119,78 +124,96 @@ identify_column_types <- function(data, metadata_path) {
   ))
 }
 
-perform_dibmix_clustering <- function(data, n_clusters = 2, metadata_path) {  # ADD metadata_path
+perform_dibmix_clustering <- function(data, n_clusters = 2, metadata_path) {
   #' Perform DIBmix clustering on mixed-type data
-  #' 
-  #' @param data Dataframe to cluster
-  #' @param n_clusters Number of clusters
-  #' @param metadata_path Path to type metadata
-  #' @return DIBmix clustering results
   
   tryCatch({
-    # Identify column types USING METADATA
-    col_info <- identify_column_types(data, metadata_path)  # PASS metadata_path
-    data_processed <- col_info$data
-    cat_cols <- col_info$categorical
-    cont_cols <- col_info$continuous
+    # ENSURE DATA IS A PROPER DATA.FRAME
+    data <- as.data.frame(data)
     
-    # --- CRITICAL DATA CONVERSION ---
-    # Ensure continuous columns are numeric 
+    # DEBUG: Check data types at entry to clustering
+    cat("=== CLUSTERING DEBUG ===\n")
+    cat("Data class at clustering entry:", class(data), "\n")
+    cat("Data classes in clustering function:\n")
+    for (col in names(data)[1:min(10, ncol(data))]) {
+      cat(sprintf("%s: %s (is.factor: %s, is.ordered: %s, is.numeric: %s)\n", 
+                  col, 
+                  paste(class(data[[col]]), collapse = ", "),
+                  is.factor(data[[col]]),
+                  is.ordered(data[[col]]),
+                  is.numeric(data[[col]])))
+    }
+    
+    # More robust factor detection
+    cat_cols <- c()
+    cont_cols <- c()
+    
+    for (col in names(data)) {
+      col_data <- data[[col]]
+      if ("factor" %in% class(col_data) || "ordered" %in% class(col_data)) {
+        cat_cols <- c(cat_cols, col)
+      } else if (is.numeric(col_data)) {
+        cont_cols <- c(cont_cols, col)
+      }
+    }
+    
+    cat("Factor detection results:\n")
+    cat("cat_cols found:", length(cat_cols), "->", paste(cat_cols[1:min(5, length(cat_cols))], collapse=", "), "\n")
+    cat("cont_cols found:", length(cont_cols), "->", paste(cont_cols[1:min(5, length(cont_cols))], collapse=", "), "\n")
+    
+    # Clean data for DIBmix
     if (length(cont_cols) > 0) {
-      data_processed[, cont_cols] <- lapply(data_processed[, cont_cols, drop = FALSE], as.numeric)
+      for (col in cont_cols) {
+        data[[col]][is.infinite(data[[col]])] <- NA
+      }
+      data <- data[complete.cases(data[, cont_cols, drop = FALSE]), ]
     }
     
-    # Ensure categorical columns are factors
     if (length(cat_cols) > 0) {
-      data_processed[, cat_cols] <- lapply(data_processed[, cat_cols, drop = FALSE], function(x) {
-        if(is.factor(x)) {
-          # Ensure factors have consistent levels
-          factor(x, levels = levels(x))
-        } else {
-          # For character columns, convert to factor with sorted unique values
-          factor(x, levels = sort(unique(x)))
+      for (col in cat_cols) {
+        if (is.factor(data[[col]])) {
+          data[[col]] <- droplevels(data[[col]])
         }
-      })
+        if (any(is.na(data[[col]]))) {
+          cat(sprintf("WARNING: NAs found in factor column %s\n", col))
+          data <- data[!is.na(data[[col]]), ]
+        }
+      }
     }
     
-    cat(sprintf("DIBmix clustering: %d categorical, %d continuous columns\n", 
+    cat(sprintf("DIBmix clustering: %d categorical, %d continuous columns\n",
                 length(cat_cols), length(cont_cols)))
-    cat("Data types after conversion:\n")
-    print(sapply(data_processed, class))
-
-    data_processed <- as.data.frame(data_processed)
     
-    # Perform DIBmix clustering
+    cat("Final data dimensions:", dim(data), "\n")
+    
+    # Perform clustering based on data types
     if (length(cat_cols) > 0 && length(cont_cols) > 0) {
-      # Mixed-type data - use DIBmix
-      result <- DIBmix(X = data_processed, 
-                       ncl = n_clusters, 
-                       catcols = cat_cols, 
-                       contcols = cont_cols,
-                       s = -1,
-                       lambda = -1,
-                       nstart = 50)
+      cat("Using DIBmix for mixed data\n")
+      result <- DIBmix(X = data,
+                        ncl = n_clusters,
+                        catcols = which(names(data) %in% cat_cols),
+                        contcols = which(names(data) %in% cont_cols),
+                        s = -1,
+                        lambda = -1,
+                        nstart = 50)
     } else if (length(cont_cols) > 0) {
-      # Continuous only
       cat("Using DIBcont for continuous data\n")
-      X_cont <- as.matrix(data_processed[, cont_cols, drop = FALSE])
+      X_cont <- as.matrix(data[, cont_cols, drop = FALSE])
       result <- DIBcont(X = X_cont, ncl = n_clusters, s = -1, nstart = 50)
     } else if (length(cat_cols) > 0) {
-      # Categorical only
       cat("Using DIBcat for categorical data\n")
-      X_cat <- data_processed[, cat_cols, drop = FALSE]
+      X_cat <- data[, cat_cols, drop = FALSE]
       result <- DIBcat(X = X_cat, ncl = n_clusters, lambda = -1, nstart = 50)
     } else {
       stop("No valid columns found for clustering")
     }
     
-    # --- ERROR CHECK BEFORE RETURNING ---
     if (is.null(result) || !"Cluster" %in% names(result)) {
       stop("Clustering returned invalid result object")
     }
     
-    # Add metadata
-    result$column_info <- col_info
+    result$categorical_cols <- cat_cols
+    result$continuous_cols <- cont_cols
     result$n_clusters <- n_clusters
     
     cat(sprintf("Clustering completed: Entropy = %.4f, Mutual Info = %.4f\n",
@@ -200,18 +223,19 @@ perform_dibmix_clustering <- function(data, n_clusters = 2, metadata_path) {  # 
     return(result)
     
   }, error = function(e) {
-    # --- ENHANCED ERROR REPORTING ---
     cat("\n!!! CLUSTERING FAILURE DETAILS !!!\n")
     cat("Error message:", e$message, "\n")
     cat("Data dimensions:", dim(data), "\n")
-    if (exists("col_info")) {
-      cat("Categorical columns:", length(col_info$categorical), "\n")
-      cat("Continuous columns:", length(col_info$continuous), "\n")
+    if (exists("cat_cols")) {
+      cat("Categorical columns found:", length(cat_cols), "\n")
+      cat("Continuous columns found:", length(cont_cols), "\n")
     }
     cat("n_clusters:", n_clusters, "\n")
+    
     return(NULL)
   })
 }
+
 
 calculate_ari <- function(true_clusters, pred_clusters) {
   #' Calculate Adjusted Rand Index between two clustering solutions

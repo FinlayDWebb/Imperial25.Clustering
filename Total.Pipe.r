@@ -70,6 +70,12 @@ n_clusters <- 2  # Number of clusters for evaluation, stick with 2 for simplicit
 # 2. PIPELINE EXECUTION
 # ----------------------------
 
+# See the first few rows of the first dataset
+example_data <- read_csv(datasets[1])
+cat("\nFirst few rows of", basename(datasets[1]), ":\n")
+print(head(example_data))
+
+
 # Initialize results storage
 all_imputation_results <- list()
 all_clustering_results <- list()
@@ -77,8 +83,7 @@ all_clustering_results <- list()
 for (dataset in datasets) {
   dataset_name <- file_path_sans_ext(basename(dataset))
 
-  # Construct metadata path (assumes metadata files are named dataset_name.meta.csv)
-  metadata_path <- file.path(data_folder, paste0(dataset_name, ".meta.csv"))
+  metadata_path <- file.path("Processed.Metadata", paste0(dataset_name, ".meta.csv"))
   
   # Verify metadata exists
   if (!file.exists(metadata_path)) {
@@ -105,22 +110,38 @@ for (dataset in datasets) {
   write_csv(imputation_results, imputation_file)
   all_imputation_results[[dataset_name]] <- imputation_results
   cat("Saved imputation results to:", imputation_file, "\n")
+
+  # After imputation, before clustering:
+cat("=== CHECKING FOR IMPUTED FILES ===\n")
+cat("Looking for pattern:", imputed_pattern, "\n")
+cat("In current directory files:\n")
+print(list.files(pattern = ".*\\.csv$"))
+cat("Files matching pattern:\n")
+print(list.files(pattern = gsub("\\*", ".*", imputed_pattern)))
   
   # ----------------------------
   # B. RUN CLUSTERING EVALUATION
   # ----------------------------
   cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
   
-  # Generate file pattern for current dataset's imputed files
-  imputed_pattern <- paste0(dataset_name, "_*.csv")
-  
-  clustering_results <- evaluate_clustering_performance(
-    original_data_path = dataset,
-    metadata_path = metadata_path,  # Pass metadata path  
-    imputed_files_pattern = imputed_pattern,
-    n_clusters = n_clusters,
-    output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))
-  )
+imputed_pattern <- sprintf("%s_.*_imputed\\.csv$", dataset_name)
+
+cat("=== CHECKING FOR IMPUTED FILES ===\n")
+cat("Looking for pattern:", imputed_pattern, "\n")
+cat("In current directory files:\n")
+all_files <- list.files(pattern = ".*\\.csv$")
+print(all_files)
+cat("Files matching pattern:\n")
+matching_files <- list.files(pattern = imputed_pattern)
+print(matching_files)
+
+clustering_results <- evaluate_clustering_performance(
+  original_data_path = dataset,
+  metadata_path = metadata_path,
+  imputed_files_pattern = imputed_pattern,  # Use correct pattern
+  n_clusters = n_clusters,
+  output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))
+)
   
   # Store results
   all_clustering_results[[dataset_name]] <- clustering_results

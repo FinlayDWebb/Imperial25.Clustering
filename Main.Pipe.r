@@ -21,45 +21,77 @@ preprocess_data <- function(file_path, metadata_path) {
   data <- read_csv(file_path, na = c("", "NA", "?"), show_col_types = FALSE)
   metadata <- read_csv(metadata_path, show_col_types = FALSE)
 
-    # Debug: Show metadata structure
+  # Debug: Show metadata structure
   cat("Metadata columns:", names(metadata), "\n")
-  if(nrow(metadata) > 0) cat("First row:", as.list(metadata[1, ]), "\n")
   
-  # Apply types from metadata - FIXED FILTER SYNTAX
+  # Print first row safely
+  if (nrow(metadata) > 0) {
+    cat("First row values:\n")
+    print(metadata[1, ])
+  }
+  
+  # Apply types from metadata
   for (col in names(data)) {
-    # FIX 1: Use base R filtering
-    meta <- metadata[metadata$variable == col, ]
-    
-    # FIX 2: Or use dplyr with .data pronoun
-    # meta <- metadata %>% filter(.data$variable == col)
-    
+    meta <- metadata[metadata[[1]] == col, ]
     if (nrow(meta) == 0) {
       cat(sprintf("Warning: No metadata for column '%s'. Skipping.\n", col))
       next
     }
-  }  
-
-  # Apply types from metadata
-  for (col in names(data)) {
-    meta <- metadata %>% filter(variable == col)
-    if (nrow(meta) == 0) next
     
     if (meta$type == "numeric") {
       data[[col]] <- as.numeric(data[[col]])
     } 
+    else if (meta$type == "binary") {
+      levels <- unlist(strsplit(meta$levels, ","))
+      levels <- trimws(levels)  
+      data[[col]] <- factor(as.character(data[[col]]), levels = levels)
+    }
     else if (meta$type == "ordered") {
       levels <- unlist(strsplit(meta$levels, ","))
-      data[[col]] <- ordered(data[[col]], levels = levels)
+      levels <- trimws(levels)   
+      data[[col]] <- ordered(as.character(data[[col]]), levels = levels)
     }
     else if (meta$type == "categorical") {
       levels <- unlist(strsplit(meta$levels, ","))
-      data[[col]] <- factor(data[[col]], levels = levels)
+      levels <- trimws(levels)  
+      data[[col]] <- factor(as.character(data[[col]]), levels = levels)
     }
   }
   
   # Basic cleaning
   clean_data <- data %>%
     mutate(across(where(is.character), trimws))
+    
+  # Debugging step
+  cat("\n=== DATA TYPE DEBUG ===\n")
+  cat("Column types after conversion:\n")
+  for (col in names(clean_data)) {
+    cat(sprintf("%s: %s (class: %s)\n", 
+                col, 
+                typeof(clean_data[[col]]), 
+                paste(class(clean_data[[col]]), collapse = ", ")))
+    
+    # Check for NAs in factors
+    if (is.factor(clean_data[[col]])) {
+      na_count <- sum(is.na(clean_data[[col]]))
+      if (na_count > 0) {
+        cat(sprintf("  -> %d NAs in factor!\n", na_count))
+      }
+    }
+    
+    # Check for NAs/Infs in numeric
+    if (is.numeric(clean_data[[col]])) {
+      na_count <- sum(is.na(clean_data[[col]]))
+      inf_count <- sum(is.infinite(clean_data[[col]]), na.rm = TRUE)
+      if (na_count > 0 || inf_count > 0) {
+        cat(sprintf("  -> %d NAs, %d Infs\n", na_count, inf_count))
+      }
+    }
+  }
+  cat("=== END DEBUG ===\n\n")
+  
+  # CRITICAL: Convert to data.frame to preserve classes
+  clean_data <- as.data.frame(clean_data)
   
   return(clean_data)
 }
@@ -523,6 +555,7 @@ calculate_pfc <- function(original, imputed) {
 # ----------------------------
 
 run_imputation_pipeline <- function(data_path, 
+                                    metadata_path,
                                     missing_rates = c(0.05, 0.10, 0.15),
                                     methods = c("MICE", "FAMD", "missForest", "MIDAS")) {
 
