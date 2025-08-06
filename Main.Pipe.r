@@ -20,17 +20,28 @@ preprocess_data <- function(file_path, metadata_path) {
   # Read data and metadata
   data <- read_csv(file_path, na = c("", "NA", "?"), show_col_types = FALSE)
   metadata <- read_csv(metadata_path, show_col_types = FALSE)
-  
-  # Debug: Print metadata columns to confirm
+
+    # Debug: Show metadata structure
   cat("Metadata columns:", names(metadata), "\n")
+  if(nrow(metadata) > 0) cat("First row:", as.list(metadata[1, ]), "\n")
   
-  # Apply types from metadata - USE CORRECT COLUMN NAME HERE
+  # Apply types from metadata - FIXED FILTER SYNTAX
   for (col in names(data)) {
-    # Use the actual column name from your metadata
-    meta <- metadata %>% filter(Column == col)  # Change "Column" to your actual column name
+    # FIX 1: Use base R filtering
+    meta <- metadata[metadata$variable == col, ]
     
-    # If that doesn't work, try: meta <- metadata[metadata$Column == col, ]
+    # FIX 2: Or use dplyr with .data pronoun
+    # meta <- metadata %>% filter(.data$variable == col)
     
+    if (nrow(meta) == 0) {
+      cat(sprintf("Warning: No metadata for column '%s'. Skipping.\n", col))
+      next
+    }
+  }  
+
+  # Apply types from metadata
+  for (col in names(data)) {
+    meta <- metadata %>% filter(variable == col)
     if (nrow(meta) == 0) next
     
     if (meta$type == "numeric") {
@@ -46,7 +57,7 @@ preprocess_data <- function(file_path, metadata_path) {
     }
   }
   
-  # Basic cleaning remains the same
+  # Basic cleaning
   clean_data <- data %>%
     mutate(across(where(is.character), trimws))
   

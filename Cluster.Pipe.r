@@ -83,13 +83,17 @@ identify_column_types <- function(data, metadata_path) {
   
   # Read metadata
   metadata <- read_csv(metadata_path, show_col_types = FALSE)
+
+  # Debug printouts
+  cat("Metadata columns in clustering:", names(metadata), "\n")
+  if(nrow(metadata) > 0) cat("First row:", as.list(metadata[1, ]), "\n")
   
   cat_cols <- c()
   cont_cols <- c()
   
   for (i in 1:ncol(data)) {
     col_name <- names(data)[i]
-    meta <- metadata %>% filter(variable == col_name)
+    meta <- metadata[metadata$variable == col_name, ]
     
     if (nrow(meta) == 0) {
       cat(sprintf("Warning: No metadata for column '%s'. Skipping.\n", col_name))
@@ -265,7 +269,7 @@ evaluate_clustering_performance <- function(original_data_path,
   original_types <- lapply(original_data, class)
   cat(sprintf("Original data dimensions: %d x %d\n", nrow(original_data), ncol(original_data)))
   
-  original_clustering <- perform_dibmix_clustering(original_data, n_clusters)
+  # original_clustering <- perform_dibmix_clustering(original_data, n_clusters)
   
   if (is.null(original_clustering)) {
     cat("ERROR: Failed to cluster original data. Stopping.\n")
