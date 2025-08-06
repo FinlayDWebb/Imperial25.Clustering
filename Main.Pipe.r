@@ -21,9 +21,16 @@ preprocess_data <- function(file_path, metadata_path) {
   data <- read_csv(file_path, na = c("", "NA", "?"), show_col_types = FALSE)
   metadata <- read_csv(metadata_path, show_col_types = FALSE)
   
-  # Apply types from metadata
+  # Debug: Print metadata columns to confirm
+  cat("Metadata columns:", names(metadata), "\n")
+  
+  # Apply types from metadata - USE CORRECT COLUMN NAME HERE
   for (col in names(data)) {
-    meta <- metadata %>% filter(variable == col)
+    # Use the actual column name from your metadata
+    meta <- metadata %>% filter(Column == col)  # Change "Column" to your actual column name
+    
+    # If that doesn't work, try: meta <- metadata[metadata$Column == col, ]
+    
     if (nrow(meta) == 0) next
     
     if (meta$type == "numeric") {
@@ -39,7 +46,7 @@ preprocess_data <- function(file_path, metadata_path) {
     }
   }
   
-  # Basic cleaning
+  # Basic cleaning remains the same
   clean_data <- data %>%
     mutate(across(where(is.character), trimws))
   

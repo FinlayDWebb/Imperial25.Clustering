@@ -34,6 +34,7 @@ run_imputation_pipeline <- function(data_path, metadata_path, ...) {
   # ...
 }
 
+if (FALSE) {
 # In main loop:
 for (dataset in datasets) {
   dataset_name <- tools::file_path_sans_ext(basename(dataset))
@@ -51,6 +52,7 @@ for (dataset in datasets) {
     metadata_path = metadata_path,
     ...
   )
+}
 }
 
 enforce_original_types <- function(data, reference) {
