@@ -1,4 +1,4 @@
-age,education_num,hours_per_week,sex,marital_status,workclass,occupation,income
+age,education-num,hours-per-week,sex,marital-status,workclass,occupation,income-greater-than-50k
 44,14,50,Male,Married-civ-spouse,Private,Adm-clerical,0
 48,9,40,Male,Never-married,Private,Sales,0
 67,13,40,Female,Widowed,Federal-gov,Adm-clerical,0

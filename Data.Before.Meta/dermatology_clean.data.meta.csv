@@ -1,6 +1,6 @@
 variable,type,levels,description,source
-erythema,ordered,"0, 1, 2, 3","Erythema severity (0=absent, 3=severe)",UCI  
-scaling,ordered,"0, 1, 2, 3","Scaling severity",UCI  
+erythema,categories,"0, 1, 2, 3","Erythema severity (0=absent, 3=severe)",UCI  
+scaling,categories,"0, 1, 2, 3","Scaling severity",UCI  
 definite_borders,binary,"0, 1","Lesion borders (0=indefinite, 1=definite)",UCI  
 itching,binary,"0, 1","Presence of itching",UCI  
 koebner_phenomenon,binary,"0, 1","Koebner phenomenon",UCI  
@@ -10,12 +10,12 @@ oral_mucosal_involvement,binary,"0, 1","Oral mucosal involvement",UCI
 knee_and_elbow_involvement,binary,"0, 1","Knee/elbow involvement",UCI  
 scalp_involvement,binary,"0, 1","Scalp involvement",UCI  
 family_history,binary,"0, 1","Family history of skin disease",UCI  
-melanin_incontinence,ordered,"0, 1, 2, 3","Melanin incontinence severity",UCI  
+melanin_incontinence,categories,"0, 1, 2, 3","Melanin incontinence severity",UCI  
 eosinophils_infiltrate,binary,"0, 1","Eosinophils in infiltrate",UCI  
 PNL_infiltrate,binary,"0, 1","PNL infiltrate",UCI  
 fibrosis_papillary_dermis,binary,"0, 1","Fibrosis of papillary dermis",UCI  
 exocytosis,binary,"0, 1","Exocytosis",UCI  
-acanthosis,ordered,"0, 1, 2, 3","Acanthosis severity",UCI  
+acanthosis,categories,"0, 1, 2, 3","Acanthosis severity",UCI  
 hyperkeratosis,binary,"0, 1","Hyperkeratosis",UCI  
 parakeratosis,binary,"0, 1","Parakeratosis",UCI  
 clubbing_rete_ridges,binary,"0, 1","Clubbing of rete ridges",UCI  
@@ -33,4 +33,4 @@ perifollicular_parakeratosis,binary,"0, 1","Perifollicular parakeratosis",UCI
 inflammatory_mononuclear_infiltrate,binary,"0, 1","Inflammatory mononuclear infiltrate",UCI  
 band_like_infiltrate,binary,"0, 1","Band-like infiltrate",UCI  
 age,numeric,,Age of patient,UCI  
-class,categorical,"1, 2, 3, 4, 5, 6","Diagnosis class (target)",UCI
+class,categories,"1, 2, 3, 4, 5, 6","Diagnosis class (target)",UCI

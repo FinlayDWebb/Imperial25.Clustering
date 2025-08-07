@@ -12,4 +12,4 @@ oldpeak,numeric,,ST depression induced by exercise,UCI
 slope,categorical,"1, 2, 3","Slope of peak exercise ST segment",UCI  
 ca,numeric,"0, 1, 2, 3","Number of major vessels colored by fluoroscopy",UCI  
 thal,categorical,"3, 6, 7","Thalassemia type (3=normal, 6=fixed defect, 7=reversible defect)",UCI  
-num,categorical,"0, 1, 2, 3, 4","Diagnosis of heart disease (target)",UCI  
+target,categorical,"0, 1, 2, 3, 4","Diagnosis of heart disease (target)",UCI  
