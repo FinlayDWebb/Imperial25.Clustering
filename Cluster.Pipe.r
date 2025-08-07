@@ -9,7 +9,8 @@
 library(readr)
 library(dplyr)
 library(devtools)
-library(tidyr) 
+library(tidyr)
+library(arrow) # For Feather support
 
 # Install and load IBclust if not already installed
 if (!require(IBclust, quietly = TRUE)) {
@@ -28,9 +29,9 @@ if (!require(mclust, quietly = TRUE)) {
 # HELPER FUNCTIONS
 # ----------------------------
 
-run_imputation_pipeline <- function(data_path, metadata_path, ...) {
+run_imputation_pipeline <- function(data_path, ...) {
   # ...
-  clean_data <- preprocess_data(data_path, metadata_path)
+  clean_data <- preprocess_data(data_path)
   # ...
 }
 
@@ -38,32 +39,27 @@ if (FALSE) {
 # In main loop:
 for (dataset in datasets) {
   dataset_name <- tools::file_path_sans_ext(basename(dataset))
-  metadata_path <- file.path("Processed.Data", paste0(dataset_name, ".meta.csv"))
-  
-  # Run pipelines with metadata
+
   imputation_results <- run_imputation_pipeline(
     data_path = dataset,
-    metadata_path = metadata_path,
     ...
   )
   
 clustering_results <- evaluate_clustering_performance(
     original_data_path = dataset,
-    metadata_path = metadata_path,  # This now points to Processed.Metadata folder
     imputed_files_pattern = imputed_pattern,
     n_clusters = n_clusters,
     output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))
   )
 }
 }
-
+  
 enforce_original_types <- function(data, reference) {
-  #' Enforce original data types from reference dataset
+    #' Enforce original data types from reference dataset
   #' 
   #' @param data Data to modify
   #' @param reference Reference dataset with correct types
   #' @return Data with corrected types
-  
   for (col_name in names(data)) {
     if (col_name %in% names(reference)) {
       if (is.factor(reference[[col_name]])) {
@@ -76,91 +72,23 @@ enforce_original_types <- function(data, reference) {
   return(data)
 }
 
-identify_column_types <- function(data, metadata_path) {
-  #' Identify column types USING METADATA
-  #' 
-  #' @param data Dataframe to analyze
-  #' @param metadata_path Path to metadata CSV
-  #' @return List with categorical and continuous column indices
-  
-  # Read metadata
-  metadata <- read_csv(metadata_path, show_col_types = FALSE)
-
-  # Debug printouts
-  cat("Metadata columns:", names(metadata), "\n")
-  if (nrow(metadata) > 0) {
-    cat("First row values:\n")
-    print(metadata[1, ])  # Use print() for data frames
-  }
-
-  cat_cols <- c()
-  cont_cols <- c()
-  
-  for (i in 1:ncol(data)) {
-    col_name <- names(data)[i]
-    meta <- metadata[metadata$variable == col_name, ]
-    
-    if (nrow(meta) == 0) {
-      cat(sprintf("Warning: No metadata for column '%s'. Skipping.\n", col_name))
-      next
-    }
-    
-    if (meta$type %in% c("categorical", "ordered")) {
-      cat_cols <- c(cat_cols, i)
-      cat(sprintf("Column %d (%s): Categorical (from metadata)\n", 
-                 i, col_name))
-    } 
-    else if (meta$type == "numeric") {
-      cont_cols <- c(cont_cols, i)
-      cat(sprintf("Column %d (%s): Continuous (from metadata)\n", 
-                 i, col_name))
-    }
-  }
-  
+# Use embedded types for column identification
+identify_column_types_embedded <- function(data) {
+  cat_cols <- names(data)[sapply(data, function(x) is.factor(x) || is.character(x))]
+  cont_cols <- names(data)[sapply(data, is.numeric)]
   return(list(
-    data = data,
     categorical = cat_cols,
     continuous = cont_cols
   ))
 }
 
-perform_dibmix_clustering <- function(data, n_clusters = 2, metadata_path) {
-  #' Perform DIBmix clustering on mixed-type data
-  
+perform_dibmix_clustering <- function(data, n_clusters = 2) {
   tryCatch({
-    # ENSURE DATA IS A PROPER DATA.FRAME
     data <- as.data.frame(data)
-    
-    # DEBUG: Check data types at entry to clustering
-    cat("=== CLUSTERING DEBUG ===\n")
-    cat("Data class at clustering entry:", class(data), "\n")
-    cat("Data classes in clustering function:\n")
-    for (col in names(data)[1:min(10, ncol(data))]) {
-      cat(sprintf("%s: %s (is.factor: %s, is.ordered: %s, is.numeric: %s)\n", 
-                  col, 
-                  paste(class(data[[col]]), collapse = ", "),
-                  is.factor(data[[col]]),
-                  is.ordered(data[[col]]),
-                  is.numeric(data[[col]])))
-    }
-    
-    # More robust factor detection
-    cat_cols <- c()
-    cont_cols <- c()
-    
-    for (col in names(data)) {
-      col_data <- data[[col]]
-      if ("factor" %in% class(col_data) || "ordered" %in% class(col_data)) {
-        cat_cols <- c(cat_cols, col)
-      } else if (is.numeric(col_data)) {
-        cont_cols <- c(cont_cols, col)
-      }
-    }
-    
-    cat("Factor detection results:\n")
-    cat("cat_cols found:", length(cat_cols), "->", paste(cat_cols[1:min(5, length(cat_cols))], collapse=", "), "\n")
-    cat("cont_cols found:", length(cont_cols), "->", paste(cont_cols[1:min(5, length(cont_cols))], collapse=", "), "\n")
-    
+    types <- identify_column_types_embedded(data)
+    cat_cols <- types$categorical
+    cont_cols <- types$continuous
+
     # Clean data for DIBmix
     if (length(cont_cols) > 0) {
       for (col in cont_cols) {
@@ -168,98 +96,66 @@ perform_dibmix_clustering <- function(data, n_clusters = 2, metadata_path) {
       }
       data <- data[complete.cases(data[, cont_cols, drop = FALSE]), ]
     }
-    
     if (length(cat_cols) > 0) {
       for (col in cat_cols) {
         if (is.factor(data[[col]])) {
           data[[col]] <- droplevels(data[[col]])
         }
         if (any(is.na(data[[col]]))) {
-          cat(sprintf("WARNING: NAs found in factor column %s\n", col))
           data <- data[!is.na(data[[col]]), ]
         }
       }
     }
-    
-    cat(sprintf("DIBmix clustering: %d categorical, %d continuous columns\n",
-                length(cat_cols), length(cont_cols)))
-    
-    cat("Final data dimensions:", dim(data), "\n")
-    
+
     # Perform clustering based on data types
     if (length(cat_cols) > 0 && length(cont_cols) > 0) {
-      cat("Using DIBmix for mixed data\n")
       result <- DIBmix(X = data,
-                        ncl = n_clusters,
-                        catcols = which(names(data) %in% cat_cols),
-                        contcols = which(names(data) %in% cont_cols),
-                        s = -1,
-                        lambda = -1,
-                        nstart = 50)
+                       ncl = n_clusters,
+                       catcols = which(names(data) %in% cat_cols),
+                       contcols = which(names(data) %in% cont_cols),
+                       s = -1,
+                       lambda = -1,
+                       nstart = 50)
     } else if (length(cont_cols) > 0) {
-      cat("Using DIBcont for continuous data\n")
       X_cont <- as.matrix(data[, cont_cols, drop = FALSE])
       result <- DIBcont(X = X_cont, ncl = n_clusters, s = -1, nstart = 50)
     } else if (length(cat_cols) > 0) {
-      cat("Using DIBcat for categorical data\n")
       X_cat <- data[, cat_cols, drop = FALSE]
       result <- DIBcat(X = X_cat, ncl = n_clusters, lambda = -1, nstart = 50)
     } else {
       stop("No valid columns found for clustering")
     }
-    
+
     if (is.null(result) || !"Cluster" %in% names(result)) {
       stop("Clustering returned invalid result object")
     }
-    
+
     result$categorical_cols <- cat_cols
     result$continuous_cols <- cont_cols
     result$n_clusters <- n_clusters
-    
+
     cat(sprintf("Clustering completed: Entropy = %.4f, Mutual Info = %.4f\n",
                 result$Entropy, result$MutualInfo))
     cat("Cluster assignments:", head(result$Cluster), "\n")
-    
+
     return(result)
-    
+
+
   }, error = function(e) {
     cat("\n!!! CLUSTERING FAILURE DETAILS !!!\n")
     cat("Error message:", e$message, "\n")
     cat("Data dimensions:", dim(data), "\n")
-    if (exists("cat_cols")) {
-      cat("Categorical columns found:", length(cat_cols), "\n")
-      cat("Continuous columns found:", length(cont_cols), "\n")
-    }
-    cat("n_clusters:", n_clusters, "\n")
-    
     return(NULL)
   })
 }
 
 
 calculate_ari <- function(true_clusters, pred_clusters) {
-  #' Calculate Adjusted Rand Index between two clustering solutions
-  #' 
-  #' @param true_clusters Reference cluster assignments (from original data)
-  #' @param pred_clusters Predicted cluster assignments (from imputed data)  
-  #' @return ARI value
-  
-  if (length(true_clusters) != length(pred_clusters)) {
-    cat("Error: Cluster vectors have different lengths\n")
-    return(NA)
-  }
-  
-  # Remove any NA values
+  if (length(true_clusters) != length(pred_clusters)) return(NA)
   valid_idx <- !is.na(true_clusters) & !is.na(pred_clusters)
-  if (sum(valid_idx) == 0) {
-    cat("Error: No valid cluster assignments found\n")
-    return(NA)
-  }
-  
+  if (sum(valid_idx) == 0) return(NA)
   true_clean <- true_clusters[valid_idx]
   pred_clean <- pred_clusters[valid_idx]
-  
-  # Calculate ARI using mclust package
   ari_value <- adjustedRandIndex(true_clean, pred_clean)
   return(ari_value)
 }
@@ -271,29 +167,22 @@ calculate_ari <- function(true_clusters, pred_clusters) {
 #################
 
 evaluate_clustering_performance <- function(original_data_path,
-                                           metadata_path,  # ADD THIS PARAM
                                            imputed_files_pattern = NULL,
                                            imputed_files_list = NULL,
                                            n_clusters = 3,
-                                           output_file = "clustering_ari_results.csv") {
+                                           output_file = "clustering_ari_results.feather") {
   cat("=== CLUSTERING EVALUATION ===\n")
   
   # Step 5: Load and cluster original dataset
   cat("\nStep 5: Clustering original dataset...\n")
-  original_data <- read_csv(original_data_path, show_col_types = FALSE)
+  original_data <- arrow::read_feather(original_data_path)
 
-  # Cluster WITH METADATA
   original_clustering <- perform_dibmix_clustering(
     original_data, 
-    n_clusters,
-    metadata_path  # PASS METADATA
+    n_clusters
   )
   
-  # Store original types for enforcement
-  original_types <- lapply(original_data, class)
   cat(sprintf("Original data dimensions: %d x %d\n", nrow(original_data), ncol(original_data)))
-  
-  # original_clustering <- perform_dibmix_clustering(original_data, n_clusters)
   
   if (is.null(original_clustering)) {
     cat("ERROR: Failed to cluster original data. Stopping.\n")
@@ -310,9 +199,8 @@ evaluate_clustering_performance <- function(original_data_path,
   } else if (!is.null(imputed_files_list)) {
     imputed_files <- imputed_files_list
   } else {
-    # Default pattern - look for common imputed file names
     imputed_files <- c()
-    patterns <- c("*mice*.csv", "*famd*.csv", "*missforest*.csv", "*midas*.csv")
+    patterns <- c("*mice*.feather", "*famd*.feather", "*missforest*.feather", "*midas*.feather")
     for (pattern in patterns) {
       imputed_files <- c(imputed_files, Sys.glob(pattern))
     }
@@ -326,54 +214,32 @@ evaluate_clustering_performance <- function(original_data_path,
   cat(sprintf("\nFound %d imputed files:\n", length(imputed_files)))
   for (f in imputed_files) cat(sprintf("  - %s\n", f))
   
-# Initialize results
   results <- data.frame()
   
-  # Step 6 & 7: Process each imputed dataset
   for (imputed_file in imputed_files) {
-    cat(sprintf("\nProcessing: %s\n", basename(imputed_file)))
-    
-    # Extract method name from filename
-    method_name <- gsub(".*_([^_]+)_.*\\.csv$", "\\1", basename(imputed_file))
+    method_name <- gsub(".*_([^_]+)_.*\\.feather$", "\\1", basename(imputed_file))
     if (method_name == basename(imputed_file)) {
-      # Fallback: use filename without extension
-      method_name <- gsub("\\.csv$", "", basename(imputed_file))
+      method_name <- gsub("\\.feather$", "", basename(imputed_file))
     }
-    
-    # Extract missing rate if present in filename
     missing_rate_match <- regmatches(imputed_file, regexpr("0\\.[0-9]+", imputed_file))
     missing_rate <- if (length(missing_rate_match) > 0) as.numeric(missing_rate_match[1]) else NA
     
-  tryCatch({
-      # Step 6: Load imputed dataset
-      imputed_data <- read_csv(imputed_file, show_col_types = FALSE)
-
-      # ENFORCE ORIGINAL TYPES
+    tryCatch({
+      imputed_data <- arrow::read_feather(imputed_file)
       imputed_data <- enforce_original_types(imputed_data, original_data)
       cat(sprintf("Imputed data dimensions: %d x %d\n", nrow(imputed_data), ncol(imputed_data)))
       
-      # Ensure row count matches original
       if (nrow(imputed_data) != nrow(original_data)) {
         cat("WARNING: Row count mismatch (Original:", nrow(original_data), "vs Imputed:", nrow(imputed_data), "). Aligning using common indices.\n")
-        
-        # Add index column to preserve row order
         imputed_data$.row_index <- 1:nrow(imputed_data)
-        
-        # Create full index template
         full_index <- data.frame(.row_index = 1:nrow(original_data))
-        
-        # Merge to align rows
         aligned_data <- full_index %>%
           left_join(imputed_data, by = ".row_index")
-        
-        # Remove index column
         aligned_data$.row_index <- NULL
-        
         imputed_data <- aligned_data
         cat(sprintf("Aligned imputed data dimensions: %d x %d\n", nrow(imputed_data), ncol(imputed_data)))
       }      
       
-      # Cluster imputed dataset
       start_time <- Sys.time()
       imputed_clustering <- perform_dibmix_clustering(imputed_data, n_clusters)
       clustering_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
@@ -385,16 +251,11 @@ evaluate_clustering_performance <- function(original_data_path,
         imputed_mutinfo <- NA
       } else {
         imputed_clusters <- imputed_clustering$Cluster
-
         imputed_entropy <- imputed_clustering$Entropy
         imputed_mutinfo <- imputed_clustering$MutualInfo
-        
-        # CRITICAL FIX: Validate cluster vector length
         if (length(original_clusters) != length(imputed_clusters)) {
           cat(sprintf("ERROR: Cluster vector length mismatch (original: %d, imputed: %d). Using intersection.\n",
                       length(original_clusters), length(imputed_clusters)))
-          
-          # Use only common indices
           common_count <- min(length(original_clusters), length(imputed_clusters))
           orig_subset <- original_clusters[1:common_count]
           imp_subset <- imputed_clusters[1:common_count]
@@ -402,16 +263,12 @@ evaluate_clustering_performance <- function(original_data_path,
           orig_subset <- original_clusters
           imp_subset <- imputed_clusters
         }
-        
-        # Step 7: Calculate ARI
         ari_score <- calculate_ari(orig_subset, imp_subset)
-        
         cat(sprintf("Imputed clustering: Entropy = %.4f, Mutual Info = %.4f\n",
                     imputed_entropy, imputed_mutinfo))
         cat(sprintf("ARI Score: %.4f\n", ari_score))
       }
 
-      # Store results
       results <- rbind(results, data.frame(
         File = basename(imputed_file),
         Method = method_name,
@@ -430,8 +287,6 @@ evaluate_clustering_performance <- function(original_data_path,
       
     }, error = function(e) {
       cat("ERROR processing", imputed_file, ":", e$message, "\n")
-      
-      # Store error result
       results <<- rbind(results, data.frame(
         File = basename(imputed_file),
         Method = method_name,
@@ -450,8 +305,7 @@ evaluate_clustering_performance <- function(original_data_path,
     })
   }
   
-  # Save results
-  write_csv(results, output_file)
+  arrow::write_feather(results, output_file)
   cat(sprintf("\n=== RESULTS SAVED TO: %s ===\n", output_file))
   
   # Print summary
@@ -520,7 +374,7 @@ evaluate_specific_files <- function(original_data_path,
 
 # For when imputed files follow a pattern
 evaluate_by_pattern <- function(original_data_path, 
-                               pattern = "*imputed*.csv", 
+                               pattern = "*imputed*.feather", 
                                n_clusters = 3) {
   return(evaluate_clustering_performance(
     original_data_path = original_data_path,
@@ -536,20 +390,20 @@ evaluate_by_pattern <- function(original_data_path,
 # Example 1: Evaluate specific imputed files
 if (FALSE) {  # Set to TRUE to run
   results <- evaluate_specific_files(
-    original_data_path = "input_data",
+    original_data_path = "input_data.feather",
     imputed_files = c(
-      "mice_0.05_imputed.csv",
-      "famd_0.05_imputed.csv", 
-      "missforest_0.05_imputed.csv",
-      "midas_0.05_pooled.csv",
-      "mice_0.10_imputed.csv",
-      "famd_0.10_imputed.csv",
-      "missforest_0.10_imputed.csv",
-        "midas_0.10_pooled.csv",
-        "mice_0.15_imputed.csv",
-        "famd_0.15_imputed.csv",
-        "missforest_0.15_imputed.csv",
-        "midas_0.15_pooled.csv"
+      "mice_0.05_imputed.feather",
+      "famd_0.05_imputed.feather", 
+      "missforest_0.05_imputed.feather",
+      "midas_0.05_pooled.feather",
+      "mice_0.10_imputed.feather",
+      "famd_0.10_imputed.feather",
+      "missforest_0.10_imputed.feather",
+      "midas_0.10_pooled.feather",
+      "mice_0.15_imputed.feather",
+      "famd_0.15_imputed.feather",
+      "missforest_0.15_imputed.feather",
+      "midas_0.15_pooled.feather"
     ),
     n_clusters = 3
   )
@@ -558,8 +412,8 @@ if (FALSE) {  # Set to TRUE to run
 # Example 2: Evaluate all CSV files with "imputed" in the name
 if (FALSE) {  # Set to TRUE to run
   results <- evaluate_by_pattern(
-    original_data_path = "adult_sample_processed.csv",
-    pattern = "*imputed*.csv",
+    original_data_path = "adult_sample_processed.feather",
+    pattern = "*imputed*.feather",
     n_clusters = 3
   )
 }
@@ -567,10 +421,10 @@ if (FALSE) {  # Set to TRUE to run
 # Example 3: Manual specification with custom parameters
 if (FALSE) {  # Set to TRUE to run
   results <- evaluate_clustering_performance(
-    original_data_path = "adult_sample_processed.csv",
-    imputed_files_pattern = "*_pooled.csv",  # For MIDAS files
+    original_data_path = "adult_sample_processed.feather",
+    imputed_files_pattern = "*_pooled.feather",  # For MIDAS files
     n_clusters = 4,  # Different number of clusters
-    output_file = "my_clustering_results.csv"
+    output_file = "my_clustering_results.feather"
   )
   
   print(head(results))
