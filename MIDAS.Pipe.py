@@ -45,9 +45,6 @@ def identify_variable_types(data, max_categories=20):
             print(f"  {col}: Continuous")
     return categorical_vars, continuous_vars
 
-# In impute_dataset function:
-categorical_vars, continuous_vars = identify_variable_types(data, metadata_path)
-
 def preprocess_data(data, categorical_vars):
     """Preprocess data following MIDASpy documentation exactly"""
     data_copy = data.copy()

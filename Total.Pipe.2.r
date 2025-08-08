@@ -13,12 +13,10 @@
 library(readr)
 library(dplyr)
 library(tools)
-library(arrow) # Add this for Feather support
 
 # Source the component scripts
 source("Main.Pipe.r")
-# source("Cluster.Pipe.r")
-source("Cluster.Pipe.3.r") # Ensure this is the correct path for the clustering script
+source("Cluster.Pipe.r")
 
 # ----------------------------
 # 0. CREATE OUTPUT DIRECTORIES
@@ -36,31 +34,35 @@ if (!dir.exists("clustering_results")) {
 # 1. DATASET CONFIGURATION
 # ----------------------------
 
-# Get all Feather files from the Processed.Data folder
+# Get all CSV files from the Processed.Data folder
 data_folder <- "Processed.Data"
 
+# Check if folder exists
 if (!dir.exists(data_folder)) {
   stop("Error: 'Processed.Data' folder not found in current directory!")
 }
 
+# Get all CSV files from the folder
 datasets <- list.files(
   path = data_folder,
-  pattern = "\\.feather$",
-  full.names = TRUE,
+  pattern = "\\.csv$",
+  full.names = TRUE,  # This gives full path like "Processed.Data/file1.csv"
   ignore.case = TRUE
 )
 
+# Check if any CSV files were found
 if (length(datasets) == 0) {
-  stop("Error: No Feather files found in 'Processed.Data' folder!")
+  stop("Error: No CSV files found in 'Processed.Data' folder!")
 }
 
-cat("Found", length(datasets), "Feather files in", data_folder, ":\n")
+# Print what files were found
+cat("Found", length(datasets), "CSV files in", data_folder, ":\n")
 for (i in seq_along(datasets)) {
   cat(sprintf("  %d. %s\n", i, basename(datasets[i])))
 }
 
 # Define parameters for the pipeline (unchanged)
-missing_rates <- c(0.05) #, 0.10, 0.15)
+missing_rates <- c(0.05, 0.10, 0.15)
 methods <- c("MICE", "FAMD", "missForest", "MIDAS")
 n_clusters <- 2  # Number of clusters for evaluation, stick with 2 for simplicity.
 
@@ -74,7 +76,6 @@ all_clustering_results <- list()
 
 for (dataset in datasets) {
   dataset_name <- file_path_sans_ext(basename(dataset))
-
   cat("\n\n", rep("=", 60), "\n", sep="")
   cat("STARTING PIPELINE FOR DATASET:", dataset, "\n")
   cat(rep("=", 60), "\n\n", sep="")
@@ -88,10 +89,10 @@ for (dataset in datasets) {
     missing_rates = missing_rates,
     methods = methods
   )
-
+  
   # Save and store results in imputation_results folder
-  imputation_file <- file.path("imputation_results", paste0(dataset_name, "_imputation_results.feather"))
-  arrow::write_feather(imputation_results, imputation_file)
+  imputation_file <- file.path("imputation_results", paste0(dataset_name, "_imputation_results.csv"))
+  write_csv(imputation_results, imputation_file)
   all_imputation_results[[dataset_name]] <- imputation_results
   cat("Saved imputation results to:", imputation_file, "\n")
   
@@ -99,9 +100,6 @@ for (dataset in datasets) {
   # B. RUN CLUSTERING EVALUATION
   # ----------------------------
   cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
-
-  # Generate file pattern for current dataset's imputed files
-  imputed_pattern <- paste0(dataset_name, "_*_imputed.feather")
   
   # Generate file pattern for current dataset's imputed files
   imputed_pattern <- paste0(dataset_name, "_*.csv")
@@ -127,13 +125,13 @@ cat(rep("=", 60), "\n\n", sep="")
 
 # Combine all imputation results
 combined_imputation <- bind_rows(all_imputation_results, .id = "Dataset")
-arrow::write_feather(combined_imputation, "combined_imputation_results.feather")
-cat("Saved combined imputation results: combined_imputation_results.feather\n")
+write_csv(combined_imputation, "combined_imputation_results.csv")
+cat("Saved combined imputation results: combined_imputation_results.csv\n")
 
 # Combine all clustering results
 combined_clustering <- bind_rows(all_clustering_results, .id = "Dataset")
-arrow::write_feather(combined_clustering, "combined_clustering_results.feather")
-cat("Saved combined clustering results: combined_clustering_results.feather\n")
+write_csv(combined_clustering, "combined_clustering_results.csv")
+cat("Saved combined clustering results: combined_clustering_results.csv\n")
 
 # ----------------------------
 # 4. FINAL REPORT
@@ -146,9 +144,9 @@ cat("Processed", length(datasets), "datasets:\n")
 cat(paste("-", datasets), sep = "\n")
 
 cat("\nSummary of results files:\n")
-cat("- Imputation results for each dataset: imputation_results/[dataset]_imputation_results.feather\n")
-cat("- Clustering results for each dataset: clustering_results/[dataset]_clustering_results.feather\n")
-cat("- Combined imputation results: combined_imputation_results.feather\n")
-cat("- Combined clustering results: combined_clustering_results.feather\n")
+cat("- Imputation results for each dataset: imputation_results/[dataset]_imputation_results.csv\n")
+cat("- Clustering results for each dataset: clustering_results/[dataset]_clustering_results.csv\n")
+cat("- Combined imputation results: combined_imputation_results.csv\n")
+cat("- Combined clustering results: combined_clustering_results.csv\n")
 
 cat("\n=== TOTAL PIPELINE EXECUTION COMPLETE ===\n")

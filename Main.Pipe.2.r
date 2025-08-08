@@ -11,19 +11,33 @@ library(mice)
 library(missMDA)
 library(missForest)
 library(tidyr)
-library(arrow)
 
 # ----------------------------
 # 1. DATA PREPROCESSING
 # ----------------------------
 
 preprocess_data <- function(file_path) {
-  # Read Feather file and use embedded types
-  data <- arrow::read_feather(file_path)
-  # Optionally trim whitespace from character columns
-  data <- data %>% mutate(across(where(is.character), trimws))
-  # No conversion of character to factor here; keep native types
-  return(as.data.frame(data))
+  #' Cleans and prepares raw data for analysis (more robust version)
+  #'
+  #' @param file_path Path to raw data file
+  #' @return Cleaned dataframe with proper data types
+  
+  # Read data treating "?" as missing from the start
+  data <- read_csv(file_path, 
+                   na = c("", "NA", "?"),  # Handle "?" during reading
+                   show_col_types = FALSE)
+  
+  # Basic cleaning operations
+  clean_data <- data %>%
+    # Remove leading/trailing whitespace from character columns
+    mutate(across(where(is.character), trimws)) %>%
+    # Convert character columns to factors
+    mutate(across(where(is.character), as.factor))
+  
+  cat("Data preprocessing complete\n")
+  cat("Dimensions:", dim(clean_data), "\n")
+  
+  return(clean_data)
 }
 
 # ----------------------------
@@ -117,47 +131,93 @@ insert_mar <- function(data, target_cols, predictor_cols, missing_rate) {
 # ----------------------------
 
 impute_mice <- function(data) {
+  #' MICE imputation with multiple datasets and pooling
+  #' 
+  #' @param data Dataframe with missing values
+  #' @return Pooled imputed dataframe
+  
   cat("\n=== MICE Imputation with Pooling ===\n")
-  # Use factors as they are, do not force conversion of character columns
+  
+  # Ensure factors are properly set
+  data <- data %>% mutate(across(where(is.character), as.factor))
+  
   set.seed(42)
+  
+  # Create predictor matrix - exclude categorical variables from PMM for other categoricals
   pred_matrix <- make.predictorMatrix(data)
+  
+  # Set methods explicitly
   methods <- make.method(data)
-  methods[sapply(data, is.factor)] <- "polyreg"
-  methods[sapply(data, is.numeric)] <- "pmm"
+  methods[sapply(data, is.factor)] <- "polyreg"  # Use polytomous regression for factors
+  methods[sapply(data, is.numeric)] <- "pmm"     # Use PMM for numeric
+  
   cat("Imputation methods:\n")
   print(methods[methods != ""])
+  
+  # Perform MICE with multiple imputations (m=5)
   imp <- mice(data,
-             m = 5,
+             m = 5,                    # Create 5 imputed datasets
              maxit = 10,
              method = methods,
              predictorMatrix = pred_matrix,
-             printFlag = TRUE,
+             printFlag = TRUE,         # Show progress
              seed = 42)
-  completed_datasets <- lapply(1:5, function(i) complete(imp, i))
+  
+  # Pool the results
+  cat("\nPooling 5 imputations...\n")
+  
+  # Extract all completed datasets
+  completed_datasets <- vector("list", 5)
+  for (i in 1:5) {
+    completed_datasets[[i]] <- complete(imp, i)
+  }
+  
+  
+  # Pool continuous variables using mean
+  # Pool categorical variables using mode
   pooled_data <- data.frame(matrix(nrow = nrow(data), ncol = ncol(data)))
   names(pooled_data) <- names(data)
+
   for (col in names(data)) {
     if (is.numeric(data[[col]])) {
-      values_matrix <- sapply(completed_datasets, function(df) df[[col]])
+      # Handle potential NAs in completed datasets
+      values_matrix <- sapply(completed_datasets, function(df) {
+        col_vals <- df[[col]]
+        if(any(is.na(col_vals))) {
+          # Impute with mean if NAs exist
+          col_vals[is.na(col_vals)] <- mean(col_vals, na.rm = TRUE)
+        }
+        col_vals
+      })
       pooled_data[[col]] <- rowMeans(values_matrix, na.rm = TRUE)
     } else if (is.factor(data[[col]])) {
+      # For categorical variables: use mode (most frequent) across imputations
       pooled_values <- character(nrow(data))
       for (row in 1:nrow(data)) {
-        imputed_values <- sapply(completed_datasets, function(df) as.character(df[[col]][row]))
-        mode_value <- names(sort(table(imputed_values), decreasing = TRUE))[1]
-        pooled_values[row] <- mode_value
+        if (is.na(data[[col]][row])) {
+          # Get values from all imputations for this missing cell
+          imputed_values <- sapply(completed_datasets, function(df) as.character(df[[col]][row]))
+          # Find mode (most frequent value)
+          mode_value <- names(sort(table(imputed_values), decreasing = TRUE))[1]
+          pooled_values[row] <- mode_value
+        } else {
+          # Keep original observed value
+          pooled_values[row] <- as.character(data[[col]][row])
+        }
       }
       pooled_data[[col]] <- factor(pooled_values, levels = levels(data[[col]]))
-    } else {
-      pooled_data[[col]] <- data[[col]]
     }
   }
+  
+  # Ensure factor levels match original data
   for (col in names(data)) {
     if (is.factor(data[[col]])) {
       pooled_data[[col]] <- factor(pooled_data[[col]], levels = levels(data[[col]]))
     }
   }
+  
   cat("Pooling complete. Missing values after pooling:", sum(is.na(pooled_data)), "\n")
+  
   return(pooled_data)
 }
 
@@ -167,33 +227,46 @@ impute_mice <- function(data) {
 impute_famd <- function(data, ncp = 10) {
   set.seed(42)
   
-  # Store original factor levels
-  factor_levels <- lapply(data, function(x) if(is.factor(x)) levels(x) else NULL)
+  # 1. Convert only categorical columns to factors
+  data <- as.data.frame(lapply(data, function(x) {
+    if (is.character(x) || is.logical(x) || (is.numeric(x) && length(unique(x)) <= 10)) {
+      factor(x)
+    } else {
+      x
+    }
+  }))
   
-  # Convert only character columns to factors
-  char_cols <- sapply(data, is.character)
-  if(any(char_cols)) {
-    data[char_cols] <- lapply(data[char_cols], as.factor)
-  }
+  # 2. Store original levels
+  factor_levels <- lapply(data, function(x) if (is.factor(x)) levels(x) else NULL)
   
   tryCatch({
-    # Perform imputation
+    # 3. Perform imputation
     imp <- missMDA::imputeFAMD(data, ncp = ncp)$completeObs
     
-    # Convert back to original types
+    # 4. Convert probability vectors back to categories
     for (col in names(data)) {
-      if (!is.null(factor_levels[[col]])) {
-        # Convert probabilities to categories
+      if (is.factor(data[[col]])) {
+        # Find probability columns (they start with colname + ".")
         prob_cols <- grep(paste0("^", col, "\\."), names(imp), value = TRUE)
+        
         if (length(prob_cols) > 0) {
+          # Get probability matrix
           probs <- as.matrix(imp[, prob_cols])
+          
+          # Assign category with highest probability
           max_cat <- apply(probs, 1, which.max)
           imp[[col]] <- factor_levels[[col]][max_cat]
         }
-        # Ensure factor type
+      }
+    }
+    
+    # 5. CRITICAL FIX: Convert back to factors with original levels
+    for (col in names(data)) {
+      if (is.factor(data[[col]])) {
         imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
       }
     }
+    
     return(imp)
   }, error = function(e) {
     message("FAMD failed: ", e$message)
@@ -331,21 +404,29 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5) 
   for (i in 1:num_files) {
     file <- sprintf(file_pattern, i)
     if (file.exists(file)) {
-      imputations[[length(imputations) + 1]] <- arrow::read_feather(file)
+      imputations[[length(imputations) + 1]] <- read_csv(file, show_col_types = FALSE)
       files_found <- files_found + 1
     }
   }
+
   if (files_found == 0) {
     cat("No MIDAS imputation files found with pattern:", file_pattern, "\n")
     return(NULL)
   }
+  
   cat("Found", files_found, "MIDAS imputation files\n")
+  
+  # Create the averaged dataset
   pooled <- imputations[[1]]
+  
+  # Numeric columns: average across imputations
   num_cols <- names(pooled)[sapply(pooled, is.numeric)]
   for (col in num_cols) {
     values <- sapply(imputations, function(df) df[[col]])
     pooled[[col]] <- rowMeans(values, na.rm = TRUE)
   }
+  
+  # Categorical columns: use mode
   cat_cols <- names(pooled)[sapply(pooled, function(x) is.factor(x) || is.character(x))]
   for (col in cat_cols) {
     values <- sapply(imputations, function(df) as.character(df[[col]]))
@@ -354,12 +435,17 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5) 
       if (length(ux) == 0) return(NA)
       ux[which.max(tabulate(match(row, ux)))]
     })
+    
+    # Convert back to factor if original was factor
     if (is.factor(imputations[[1]][[col]])) {
       pooled[[col]] <- factor(pooled[[col]], levels = levels(imputations[[1]][[col]]))
     }
   }
-  arrow::write_feather(pooled, output_file)
+  
+  # Save pooled imputation
+  write_csv(pooled, output_file)
   cat("Saved pooled MIDAS imputation to", output_file, "\n")
+  
   return(pooled)
 }
 
