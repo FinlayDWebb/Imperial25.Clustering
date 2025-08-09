@@ -77,17 +77,48 @@ perform_dibmix_clustering <- function(data, n_clusters = 3) {
   #' @param data Dataframe to cluster
   #' @param n_clusters Number of clusters
   #' @return DIBmix clustering results
-  
+
   tryCatch({
+    data <- as.data.frame(data)  # Ensure data is a dataframe
+
     # Identify column types
-    col_info <- identify_column_types(data)
-    data_processed <- col_info$data
-    cat_cols <- col_info$categorical
-    cont_cols <- col_info$continuous
+    # col_info <- identify_column_types(data)
+    # data_processed <- col_info$data
+    # cat_cols <- col_info$categorical
+    # cont_cols <- col_info$continuous
+
+        # Identify column types (new)
+    types <- identify_column_types_embedded(data)
+    cat_cols <- types$categorical
+    cont_cols <- types$continuous
+    
+    # Handle continuous variables: ensure numeric matrix
+    if (length(cont_cols) > 0) {
+      X_cont <- as.matrix(data[, cont_cols, drop = FALSE])
+      mode(X_cont) <- "numeric"  # Force numeric type
+    }
+    
+    # Handle categorical variables: ensure factor data frame
+    if (length(cat_cols) > 0) {
+      X_cat <- data[, cat_cols, drop = FALSE]
+      # Convert to factors
+      X_cat[] <- lapply(X_cat, function(x) if(!is.factor(x)) factor(x) else x)
+    }
+    
+    # Perform clustering
+    if (length(cat_cols) > 0 && length(cont_cols) > 0) {
+      result <- DIBmix(
+        X = X_cat,  # Categorical as factor data frame
+        Y = X_cont,  # Continuous as numeric matrix
+        ncl = n_clusters,
+        s = -1,
+        lambda = -1,
+        nstart = 50
+      )
     
     # --- CRITICAL DATA CONVERSION ---
     # Ensure continuous columns are numeric 
-    if (length(cont_cols) > 0) {
+    } else if (length(cont_cols) > 0) {
       data_processed[, cont_cols] <- lapply(data_processed[, cont_cols, drop = FALSE], as.numeric)
     }
     

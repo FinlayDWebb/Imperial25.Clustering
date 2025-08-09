@@ -60,7 +60,7 @@ for (i in seq_along(datasets)) {
 }
 
 # Define parameters for the pipeline (unchanged)
-missing_rates <- c(0.05) #, 0.10, 0.15)
+missing_rates <- c(0.05) #,0.10, 0.15)
 methods <- c("MICE", "FAMD", "missForest", "MIDAS")
 n_clusters <- 2  # Number of clusters for evaluation, stick with 2 for simplicity.
 
@@ -103,14 +103,11 @@ for (dataset in datasets) {
   # Generate file pattern for current dataset's imputed files
   imputed_pattern <- paste0(dataset_name, "_*_imputed.feather")
   
-  # Generate file pattern for current dataset's imputed files
-  imputed_pattern <- paste0(dataset_name, "_*.csv")
-  
   clustering_results <- evaluate_clustering_performance(
     original_data_path = dataset,
     imputed_files_pattern = imputed_pattern,
     n_clusters = n_clusters,
-    output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))
+    output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.feather"))
   )
   
   # Store results
