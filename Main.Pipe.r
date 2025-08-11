@@ -322,13 +322,10 @@ impute_missforest <- function(data) {
 # ----------------------------
 
 process_midas_imputations <- function(file_pattern, output_file, num_files = 5, original_data = NULL) {
-  #' Process multiple MIDAS imputation files and create pooled result
-  
-  # Read all MIDAS imputations
   imputations <- list()
   files_found <- 0
   
-  for (i in 1:num_files) {
+  for (i in seq_len(num_files)) {
     file <- sprintf(file_pattern, i)
     if (file.exists(file)) {
       imputations[[length(imputations) + 1]] <- arrow::read_feather(file)
@@ -342,16 +339,19 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5, 
   cat("Found", files_found, "MIDAS imputation files\n")
   
   pooled <- imputations[[1]]
+  
+  # Numeric pooling
   num_cols <- names(pooled)[sapply(pooled, is.numeric)]
   for (col in num_cols) {
     values <- sapply(imputations, function(df) df[[col]])
     pooled[[col]] <- rowMeans(values, na.rm = TRUE)
   }
   
+  # Categorical pooling
   cat_cols <- names(pooled)[sapply(pooled, function(x) is.factor(x) || is.character(x))]
   for (col in cat_cols) {
     values <- sapply(imputations, function(df) as.character(df[[col]]))
-    pooled[[col]] <- apply(values, 1, function(row) {
+    pooled[[col]] <- apply(values, 1, \(row) {
       ux <- unique(row[!is.na(row)])
       if (length(ux) == 0) return(NA)
       ux[which.max(tabulate(match(row, ux)))]
@@ -361,11 +361,10 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5, 
     }
   }
   
-  # New block to match types to original data
+  # Enforce original types
   if (!is.null(original_data)) {
-  for (col in names(original_data)) {
-    target_type <- class(original_data[[col]])[1]
-
+    for (col in names(original_data)) {
+      target_type <- class(original_data[[col]])[1]
       if (target_type %in% c("numeric", "integer")) {
         pooled[[col]] <- as.numeric(pooled[[col]])
       } else if (target_type == "factor") {
@@ -376,11 +375,18 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5, 
     }
   }
   
-  arrow::write_feather(pooled, output_file)
+  # Build Arrow Table with schema from original_data
+  if (!is.null(original_data)) {
+    schema <- arrow::schema(!!!lapply(original_data, function(col) arrow::type_of(col)))
+    table <- arrow::Table$create(!!!pooled, schema = schema)
+    arrow::write_feather(table, output_file)
+  } else {
+    arrow::write_feather(pooled, output_file)
+  }
+  
   cat("Saved pooled MIDAS imputation to", output_file, "\n")
   return(pooled)
 }
-
 
 # ----------------------------
 # EVALUATION METRICS FUNCTIONS
