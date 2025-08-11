@@ -12,6 +12,8 @@ library(devtools)
 library(tidyr)
 library(arrow) # For Feather support
 
+source("Main.Pipe.r") # This is for the run_imputation_pipeline function
+
 # Install and load IBclust if not already installed
 if (!require(IBclust, quietly = TRUE)) {
   cat("Installing IBclust package from GitHub...\n")
@@ -28,31 +30,6 @@ if (!require(mclust, quietly = TRUE)) {
 # ----------------------------
 # HELPER FUNCTIONS
 # ----------------------------
-
-run_imputation_pipeline <- function(data_path, ...) {
-  # ...
-  clean_data <- preprocess_data(data_path)
-  # ...
-}
-
-if (FALSE) {
-# In main loop:
-for (dataset in datasets) {
-  dataset_name <- tools::file_path_sans_ext(basename(dataset))
-
-  imputation_results <- run_imputation_pipeline(
-    data_path = dataset,
-    ...
-  )
-  
-clustering_results <- evaluate_clustering_performance(
-    original_data_path = dataset,
-    imputed_files_pattern = imputed_pattern,
-    n_clusters = n_clusters,
-    output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.csv"))
-  )
-}
-}
   
 enforce_original_types <- function(data, reference) {
     #' Enforce original data types from reference dataset

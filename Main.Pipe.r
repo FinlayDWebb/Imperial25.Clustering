@@ -363,8 +363,9 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5, 
   
   # New block to match types to original data
   if (!is.null(original_data)) {
-    for (col in names(original_data)) {
-      target_type <- class(original_data[[col]])[1]
+  for (col in names(original_data)) {
+    target_type <- class(original_data[[col]])[1]
+
       if (target_type %in% c("numeric", "integer")) {
         pooled[[col]] <- as.numeric(pooled[[col]])
       } else if (target_type == "factor") {
@@ -489,20 +490,22 @@ run_imputation_pipeline <- function(data_path,
         # Process and pool MIDAS imputations
         imputed_data <- process_midas_imputations(
           file_pattern = paste0(midas_output_prefix, "_imp_%d.feather"),
-          output_file = paste0(midas_output_prefix, "_pooled.feather")
+          output_file = paste0(midas_output_prefix, "_pooled.feather"),
+            original_data = clean_data
         )
 
         # Match types to original clean_data
         for (col in names(clean_data)) {
           target_type <- class(clean_data[[col]])[1]
-        if (target_type %in% c("numeric", "integer")) {
-          imputed_data[[col]] <- as.numeric(imputed_data[[col]])
-        } else if (target_type == "factor") {
-          imputed_data[[col]] <- factor(imputed_data[[col]], levels = levels(clean_data[[col]]))
-        } else if (target_type == "character") {
-          imputed_data[[col]] <- as.character(imputed_data[[col]])
+
+          if (target_type %in% c("numeric", "integer")) {
+            imputed_data[[col]] <- as.numeric(imputed_data[[col]])
+          } else if (target_type == "factor") {
+            imputed_data[[col]] <- factor(imputed_data[[col]], levels = levels(clean_data[[col]]))
+          } else if (target_type == "character") {
+            imputed_data[[col]] <- as.character(imputed_data[[col]])
+          }
         }
-  }
         
         # Clean up temporary file
         if (file.exists(midas_input)) file.remove(midas_input)
