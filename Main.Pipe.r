@@ -375,13 +375,18 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5, 
     }
   }
   
-  # Build Arrow Table with schema from original_data
+  # Block to match types to original data
   if (!is.null(original_data)) {
-    schema <- arrow::schema(!!!lapply(original_data, function(col) arrow::type_of(col)))
-    table <- arrow::Table$create(!!!pooled, schema = schema)
-    arrow::write_feather(table, output_file)
-  } else {
-    arrow::write_feather(pooled, output_file)
+    for (col in names(original_data)) {
+      target_type <- class(original_data[[col]])[1]
+      if (target_type %in% c("numeric", "integer")) {
+        pooled[[col]] <- as.numeric(pooled[[col]])
+      } else if (target_type == "factor") {
+        pooled[[col]] <- factor(pooled[[col]], levels = levels(original_data[[col]]))
+      } else if (target_type == "character") {
+        pooled[[col]] <- as.character(pooled[[col]])
+      }
+    }
   }
   
   cat("Saved pooled MIDAS imputation to", output_file, "\n")
