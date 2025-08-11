@@ -353,10 +353,18 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5, 
   
   pooled <- imputations[[1]]
   num_cols <- names(original_data)[sapply(original_data, is.numeric)]
-  for (col in num_cols) {
-    values <- sapply(imputations, function(df) df[[col]])
-    pooled[[col]] <- rowMeans(values, na.rm = TRUE)
+for (col in num_cols) {
+  vals <- sapply(imputations, function(df) suppressWarnings(as.numeric(df[[col]])))
+  
+  # Warn if coercion produced NAs where there weren't any before
+  if (any(is.na(vals) & !is.na(sapply(imputations, function(df) df[[col]])))) {
+    warning(sprintf("Column %s: Non-numeric values coerced to NA during pooling", col))
   }
+  
+  pooled[[col]] <- rowMeans(vals, na.rm = TRUE)
+}
+
+
   
   cat_cols <- names(original_data)[sapply(original_data, is.factor)]
   for (col in cat_cols) {
