@@ -12,6 +12,7 @@ import MIDASpy as md
 from sklearn.preprocessing import MinMaxScaler
 import os
 import sys
+import pyarrow.feather as feather
 
 # Suppress TensorFlow and NumPy warnings
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -28,21 +29,25 @@ if np.version.version >= '1.24.0':
 # Set random seed for reproducibility
 np.random.seed(42)
 
-def identify_variable_types(data, max_categories=20):
-    """Automatically identify categorical and continuous variables from embedded types."""
+
+def identify_variable_types_from_metadata(file_path):
+    """Identify variable types from Feather file's embedded schema instead of guessing."""
+    table = feather.read_table(file_path)
     categorical_vars = []
     continuous_vars = []
-    for col in data.columns:
-        unique_vals = data[col].dropna().unique()
-        if data[col].dtype.name in ['object', 'category']:
-            categorical_vars.append(col)
-            print(f"  {col}: Categorical (dtype: {data[col].dtype})")
-        elif len(unique_vals) <= max_categories:
-            categorical_vars.append(col)
-            print(f"  {col}: Categorical (low cardinality: {len(unique_vals)})")
+    
+    for name, field in zip(table.schema.names, table.schema):
+        dtype_str = str(field.type)
+        if "dictionary" in dtype_str or "string" in dtype_str:
+            categorical_vars.append(name)
+            print(f"  {name}: Categorical (from Feather metadata: {dtype_str})")
+        elif "int" in dtype_str or "double" in dtype_str or "float" in dtype_str:
+            continuous_vars.append(name)
+            print(f"  {name}: Continuous (from Feather metadata: {dtype_str})")
         else:
-            continuous_vars.append(col)
-            print(f"  {col}: Continuous")
+            print(f"  {name}: Unknown type ({dtype_str}), treating as categorical by default")
+            categorical_vars.append(name)
+    
     return categorical_vars, continuous_vars
 
 def preprocess_data(data, categorical_vars):
@@ -146,7 +151,7 @@ def impute_dataset(input_file, output_prefix, m=5, layer_structure=[256, 256],
         print(f"Error loading data: {e}")
         return None
     print(f"\nIdentifying variable types (max_categories={max_categories}):")
-    categorical_vars, continuous_vars = identify_variable_types(data, max_categories)
+    categorical_vars, continuous_vars = identify_variable_types_from_metadata(input_file)
     if not categorical_vars and not continuous_vars:
         print("Error: No valid variables identified!")
         return None

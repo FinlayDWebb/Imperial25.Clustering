@@ -323,58 +323,46 @@ impute_missforest <- function(data) {
 
 process_midas_imputations <- function(file_pattern, output_file, num_files = 5, original_data = NULL) {
   imputations <- list()
-  files_found <- 0
   
   for (i in 1:num_files) {
     file <- sprintf(file_pattern, i)
     if (file.exists(file)) {
-      df <- arrow::read_feather(file) %>% as.data.frame()
-      
-      # Restore categorical columns from original_data before pooling
-      if (!is.null(original_data)) {
-        for (col in names(original_data)) {
-          if (is.factor(original_data[[col]])) {
-            # Convert numeric codes or strings to factors with correct levels
-            df[[col]] <- factor(as.character(df[[col]]), levels = levels(original_data[[col]]))
-          }
-        }
-      }
-      
-      imputations[[length(imputations) + 1]] <- df
-      files_found <- files_found + 1
+      imputations[[length(imputations) + 1]] <- arrow::read_feather(file) %>% as.data.frame()
     }
   }
   
-  if (files_found == 0) {
-    cat("No MIDAS imputation files found with pattern:", file_pattern, "\n")
-    return(NULL)
+  if (length(imputations) == 0) {
+    stop("No MIDAS imputation files found with pattern: ", file_pattern)
   }
-  cat("Found", files_found, "MIDAS imputation files\n")
+  cat("Found", length(imputations), "MIDAS imputation files\n")
   
   pooled <- imputations[[1]]
-  num_cols <- names(original_data)[sapply(original_data, is.numeric)]
-for (col in num_cols) {
-  vals <- sapply(imputations, function(df) suppressWarnings(as.numeric(df[[col]])))
   
-  # Warn if coercion produced NAs where there weren't any before
-  if (any(is.na(vals) & !is.na(sapply(imputations, function(df) df[[col]])))) {
-    warning(sprintf("Column %s: Non-numeric values coerced to NA during pooling", col))
-  }
-  
-  pooled[[col]] <- rowMeans(vals, na.rm = TRUE)
-}
-
-
-  
-  cat_cols <- names(original_data)[sapply(original_data, is.factor)]
-  for (col in cat_cols) {
-    values <- sapply(imputations, function(df) as.character(df[[col]]))
-    pooled[[col]] <- apply(values, 1, function(row) {
-      ux <- unique(row[!is.na(row)])
-      if (length(ux) == 0) return(NA)
-      ux[which.max(tabulate(match(row, ux)))]
-    })
-    pooled[[col]] <- factor(pooled[[col]], levels = levels(original_data[[col]]))
+  for (col in names(original_data)) {
+    if (is.numeric(original_data[[col]])) {
+      # Force numeric pooling
+      vals <- sapply(imputations, function(df) suppressWarnings(as.numeric(df[[col]])))
+      pooled[[col]] <- rowMeans(vals, na.rm = TRUE)
+      
+    } else if (is.factor(original_data[[col]])) {
+      # Factor mode pooling
+      vals <- sapply(imputations, function(df) as.character(df[[col]]))
+      pooled[[col]] <- apply(vals, 1, function(row) {
+        ux <- unique(row[!is.na(row) & row != ""])
+        if (length(ux) == 0) return(NA)
+        ux[which.max(tabulate(match(row, ux)))]
+      })
+      pooled[[col]] <- factor(pooled[[col]], levels = levels(original_data[[col]]))
+      
+    } else if (is.character(original_data[[col]])) {
+      # Character mode pooling
+      vals <- sapply(imputations, function(df) as.character(df[[col]]))
+      pooled[[col]] <- apply(vals, 1, function(row) {
+        ux <- unique(row[!is.na(row) & row != ""])
+        if (length(ux) == 0) return(NA)
+        ux[which.max(tabulate(match(row, ux)))]
+      })
+    }
   }
   
   arrow::write_feather(pooled, output_file)
