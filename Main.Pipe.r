@@ -164,7 +164,7 @@ impute_mice <- function(data) {
 # Perhaps this won't work with the high categorical datasets. I need to re-think this. Perhaps
 # use some more choice datasets.
 
-impute_famd <- function(data, ncp = 10) {
+impute_famd <- function(data, ncp = 4) {
   set.seed(42)
   
   # Store original factor levels
@@ -322,6 +322,7 @@ impute_missforest <- function(data) {
 # ----------------------------
 
 process_midas_imputations <- function(file_pattern, output_file, num_files = 5, original_data = NULL) {
+
   imputations <- list()
   
   for (i in 1:num_files) {
@@ -364,6 +365,21 @@ process_midas_imputations <- function(file_pattern, output_file, num_files = 5, 
       })
     }
   }
+
+  # After pooling loop, before writing file:
+for (col in names(pooled)) {
+  if (is.numeric(pooled[[col]])) {
+    pooled[[col]][is.na(pooled[[col]])] <- mean(pooled[[col]], na.rm = TRUE)
+  } else if (is.factor(pooled[[col]])) {
+    mode_val <- names(which.max(table(pooled[[col]])))
+    pooled[[col]][is.na(pooled[[col]])] <- mode_val
+    pooled[[col]] <- factor(pooled[[col]], levels = levels(original_data[[col]]))
+  } else if (is.character(pooled[[col]])) {
+    mode_val <- names(which.max(table(pooled[[col]])))
+    pooled[[col]][is.na(pooled[[col]])] <- mode_val
+  }
+}
+
   
   arrow::write_feather(pooled, output_file)
   cat("Saved pooled MIDAS imputation to", output_file, "\n")
@@ -483,15 +499,19 @@ run_imputation_pipeline <- function(data_path,
             original_data = clean_data
         )
 
-        # Match types to original clean_data
+          
+        # SAFE TYPE CONVERSION
         for (col in names(clean_data)) {
-          target_type <- class(clean_data[[col]])[1]
-
-          if (target_type %in% c("numeric", "integer")) {
+          if (is.factor(clean_data[[col]])) {
+            imputed_data[[col]] <- factor(
+              as.character(imputed_data[[col]]),
+              levels = levels(clean_data[[col]])
+            )
+          } 
+          else if (is.numeric(clean_data[[col]])) {
             imputed_data[[col]] <- as.numeric(imputed_data[[col]])
-          } else if (target_type == "factor") {
-            imputed_data[[col]] <- factor(imputed_data[[col]], levels = levels(clean_data[[col]]))
-          } else if (target_type == "character") {
+          } 
+          else if (is.character(clean_data[[col]])) {
             imputed_data[[col]] <- as.character(imputed_data[[col]])
           }
         }

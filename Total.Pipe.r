@@ -17,8 +17,8 @@ library(arrow) # Add this for Feather support
 
 # Source the component scripts
 source("Main.Pipe.r")
-# source("Cluster.Pipe.r")
-source("Cluster.Pipe.3.r") # Ensure this is the correct path for the clustering script
+source("Cluster.Pipe.r")
+# source("Cluster.Pipe.3.r") # Ensure this is the correct path for the clustering script
 
 # ----------------------------
 # 0. CREATE OUTPUT DIRECTORIES
@@ -61,7 +61,7 @@ for (i in seq_along(datasets)) {
 
 # Define parameters for the pipeline (unchanged)
 missing_rates <- c(0.05) #,0.10, 0.15)
-methods <- c("MICE", "FAMD", "missForest", "MIDAS")
+methods <- c("MICE", "FAMD", "missForest") # "MIDAS" left out, too many errors.
 n_clusters <- 2  # Number of clusters for evaluation, stick with 2 for simplicity.
 
 # ----------------------------

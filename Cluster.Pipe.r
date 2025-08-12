@@ -204,6 +204,11 @@ evaluate_clustering_performance <- function(original_data_path,
     tryCatch({
       imputed_data <- arrow::read_feather(imputed_file)
       imputed_data <- enforce_original_types(imputed_data, original_data)
+      
+      # code to check for NA counts
+      cat("NA counts per column after type enforcement:\n")
+      print(colSums(is.na(imputed_data)))
+
       cat(sprintf("Imputed data dimensions: %d x %d\n", nrow(imputed_data), ncol(imputed_data)))
       
       if (nrow(imputed_data) != nrow(original_data)) {

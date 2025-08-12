@@ -270,7 +270,7 @@ def main():
     imputations = impute_dataset(
         input_file=input_file,
         output_prefix=output_prefix,
-        m=5,
+        m=10,
         layer_structure=[256, 256, 128],
         training_epochs=100,
         max_categories=20
