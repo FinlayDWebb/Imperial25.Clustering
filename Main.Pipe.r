@@ -161,9 +161,6 @@ impute_mice <- function(data) {
   return(pooled_data)
 }
 
-# Perhaps this won't work with the high categorical datasets. I need to re-think this. Perhaps
-# use some more choice datasets.
-
 impute_famd <- function(data, ncp = 10) {
   set.seed(42)
   
@@ -318,71 +315,6 @@ impute_missforest <- function(data) {
 }
 
 # ----------------------------
-# 5. MIDAS IMPUTATION HANDLING
-# ----------------------------
-
-process_midas_imputations <- function(file_pattern, output_file, num_files = 5, original_data = NULL) {
-  #' Process multiple MIDAS imputation files and create pooled result
-  
-  # Read all MIDAS imputations
-  imputations <- list()
-  files_found <- 0
-  
-  for (i in 1:num_files) {
-    file <- sprintf(file_pattern, i)
-    if (file.exists(file)) {
-      imputations[[length(imputations) + 1]] <- arrow::read_feather(file)
-      files_found <- files_found + 1
-    }
-  }
-  if (files_found == 0) {
-    cat("No MIDAS imputation files found with pattern:", file_pattern, "\n")
-    return(NULL)
-  }
-  cat("Found", files_found, "MIDAS imputation files\n")
-  
-  pooled <- imputations[[1]]
-  num_cols <- names(pooled)[sapply(pooled, is.numeric)]
-  for (col in num_cols) {
-    values <- sapply(imputations, function(df) df[[col]])
-    pooled[[col]] <- rowMeans(values, na.rm = TRUE)
-  }
-  
-  cat_cols <- names(pooled)[sapply(pooled, function(x) is.factor(x) || is.character(x))]
-  for (col in cat_cols) {
-    values <- sapply(imputations, function(df) as.character(df[[col]]))
-    pooled[[col]] <- apply(values, 1, function(row) {
-      ux <- unique(row[!is.na(row)])
-      if (length(ux) == 0) return(NA)
-      ux[which.max(tabulate(match(row, ux)))]
-    })
-    if (is.factor(imputations[[1]][[col]])) {
-      pooled[[col]] <- factor(pooled[[col]], levels = levels(imputations[[1]][[col]]))
-    }
-  }
-  
-  # New block to match types to original data
-  if (!is.null(original_data)) {
-  for (col in names(original_data)) {
-    target_type <- class(original_data[[col]])[1]
-
-      if (target_type %in% c("numeric", "integer")) {
-        pooled[[col]] <- as.numeric(pooled[[col]])
-      } else if (target_type == "factor") {
-        pooled[[col]] <- factor(pooled[[col]], levels = levels(original_data[[col]]))
-      } else if (target_type == "character") {
-        pooled[[col]] <- as.character(pooled[[col]])
-      }
-    }
-  }
-  
-  arrow::write_feather(pooled, output_file)
-  cat("Saved pooled MIDAS imputation to", output_file, "\n")
-  return(pooled)
-}
-
-
-# ----------------------------
 # EVALUATION METRICS FUNCTIONS
 # ----------------------------
 
@@ -418,22 +350,8 @@ calculate_pfc <- function(original, imputed) {
   if (length(cat_cols) == 0) return(NA)
   
   pfc_vals <- sapply(cat_cols, function(col) {
-    # Handle the prefix that MIDASpy adds
     orig_char <- as.character(original[[col]])
     imp_char <- as.character(imputed[[col]])
-    
-    # Remove the column name prefix if present (e.g., "workclass_Private" -> "Private")
-    imp_char <- gsub(paste0("^", col, "_"), "", imp_char)
-
-    # Convert both to character to handle 1.0 vs 1 issue
-    orig_char <- as.character(original[[col]])
-    imp_char <- as.character(imputed[[col]])
-    
-    # For numeric-like factors, also try removing decimal zeros
-    if (all(grepl("^\\d+(\\.0*)?$", imp_char))) {
-      imp_char <- gsub("\\.0+$", "", imp_char)
-    }
-    
     mean(orig_char != imp_char, na.rm = TRUE)
   })
   
@@ -446,7 +364,7 @@ calculate_pfc <- function(original, imputed) {
 
 run_imputation_pipeline <- function(data_path, 
                                     missing_rates = c(0.05, 0.10, 0.15),
-                                    methods = c("MICE", "FAMD", "missForest", "MIDAS")) {
+                                    methods = c("MICE", "FAMD", "missForest")) {
 
   # Extract dataset name for file prefixes
   base_name <- tools::file_path_sans_ext(basename(data_path))
@@ -473,63 +391,23 @@ run_imputation_pipeline <- function(data_path,
       start_time <- Sys.time()
       imputed_data <- NULL
       
-      if (method == "MIDAS") {
-        # Special handling for MIDAS
-        midas_input <- sprintf("%s_mar_%.2f.feather", base_name, rate)
-        midas_output_prefix <- sprintf("%s_midas_%.2f", base_name, rate)
-        
-        # Save temporary file for Python processing
-        write_feather(mar_data, midas_input)
-        cat("Saved input file:", midas_input, "\n")
-        
-        # Call Python script (assumes it's in same directory)
-        python_cmd <- sprintf("python MIDAS.Pipe.py %s %s", midas_input, midas_output_prefix)
-        cat("Running:", python_cmd, "\n")
-        system(python_cmd)
-
-        # Process and pool MIDAS imputations
-        imputed_data <- process_midas_imputations(
-          file_pattern = paste0(midas_output_prefix, "_imp_%d.feather"),
-          output_file = paste0(midas_output_prefix, "_pooled.feather"),
-            original_data = clean_data
+      imputed_data <- tryCatch({
+        switch(method,
+               "MICE" = impute_mice(mar_data),
+               "FAMD" = impute_famd(mar_data),
+               "missForest" = impute_missforest(mar_data)
         )
-
-        # Match types to original clean_data
-        for (col in names(clean_data)) {
-          target_type <- class(clean_data[[col]])[1]
-
-          if (target_type %in% c("numeric", "integer")) {
-            imputed_data[[col]] <- as.numeric(imputed_data[[col]])
-          } else if (target_type == "factor") {
-            imputed_data[[col]] <- factor(imputed_data[[col]], levels = levels(clean_data[[col]]))
-          } else if (target_type == "character") {
-            imputed_data[[col]] <- as.character(imputed_data[[col]])
-          }
-        }
-        
-        # Clean up temporary file
-        if (file.exists(midas_input)) file.remove(midas_input)
-        
-      } else {
-        # R-based methods
-        imputed_data <- tryCatch({
-          switch(method,
-                 "MICE" = impute_mice(mar_data),
-                 "FAMD" = impute_famd(mar_data),
-                 "missForest" = impute_missforest(mar_data)
-          )
-        }, error = function(e) {
-          cat(method, "imputation failed:", e$message, "\n")
-          NULL
-        })
-      }
+      }, error = function(e) {
+        cat(method, "imputation failed:", e$message, "\n")
+        NULL
+      })
     
       if (is.null(imputed_data)) {
         cat(method, "imputation returned NULL, skipping...\n")
         next
       }
 
-      # Save the imputed dataset to Feather ***
+      # Save the imputed dataset to Feather
       output_filename <- sprintf("%s_%s_%.2f_imputed.feather", base_name, tolower(method), rate)
       write_feather(imputed_data, output_filename)
       cat("Saved imputed data to:", output_filename, "\n")
@@ -566,7 +444,3 @@ run_imputation_pipeline <- function(data_path,
   
   return(results)
 }
-
-imputed_data <- read_feather("ty_boston_data_midas_0.05_imputed.feather")
-sapply(imputed_data, class)
-sapply(imputed_data, function(x) length(dim(x)))

@@ -177,7 +177,7 @@ evaluate_clustering_performance <- function(original_data_path,
     imputed_files <- imputed_files_list
   } else {
     imputed_files <- c()
-    patterns <- c("*mice*.feather", "*famd*.feather", "*missforest*.feather", "*midas*.feather")
+    patterns <- c("*mice*.feather", "*famd*.feather", "*missforest*.feather")
     for (pattern in patterns) {
       imputed_files <- c(imputed_files, Sys.glob(pattern))
     }
@@ -358,51 +358,4 @@ evaluate_by_pattern <- function(original_data_path,
     imputed_files_pattern = pattern,
     n_clusters = n_clusters
   ))
-}
-
-# =============================================
-# EXAMPLE USAGE
-# =============================================
-
-# Example 1: Evaluate specific imputed files
-if (FALSE) {  # Set to TRUE to run
-  results <- evaluate_specific_files(
-    original_data_path = "input_data.feather",
-    imputed_files = c(
-      "mice_0.05_imputed.feather",
-      "famd_0.05_imputed.feather", 
-      "missforest_0.05_imputed.feather",
-      "midas_0.05_pooled.feather",
-      "mice_0.10_imputed.feather",
-      "famd_0.10_imputed.feather",
-      "missforest_0.10_imputed.feather",
-      "midas_0.10_pooled.feather",
-      "mice_0.15_imputed.feather",
-      "famd_0.15_imputed.feather",
-      "missforest_0.15_imputed.feather",
-      "midas_0.15_pooled.feather"
-    ),
-    n_clusters = 3
-  )
-}
-
-# Example 2: Evaluate all CSV files with "imputed" in the name
-if (FALSE) {  # Set to TRUE to run
-  results <- evaluate_by_pattern(
-    original_data_path = "adult_sample_processed.feather",
-    pattern = "*imputed*.feather",
-    n_clusters = 3
-  )
-}
-
-# Example 3: Manual specification with custom parameters
-if (FALSE) {  # Set to TRUE to run
-  results <- evaluate_clustering_performance(
-    original_data_path = "adult_sample_processed.feather",
-    imputed_files_pattern = "*_pooled.feather",  # For MIDAS files
-    n_clusters = 4,  # Different number of clusters
-    output_file = "my_clustering_results.feather"
-  )
-  
-  print(head(results))
 }
