@@ -1,23 +1,22 @@
 import pandas as pd
 
-# Read the CSV file (adjust filename if needed)
-df = pd.read_csv('new1.banking.train.csv', sep=';')  # dataset is often semicolon-separated
+# Read the CSV file (adjust filename & separator if needed)
+df = pd.read_csv('cleaned.adult.income.csv')
 
 # Make a copy
 copy = df.copy()
 
 # Categorical columns
 categorical_cols = [
-    'job',
-    'marital',
+    'workclass',
     'education',
-    'default',
-    'housing',
-    'loan',
-    'contact',
-    'month',
-    'poutcome',
-    'y'  # target variable
+    'marital-status',
+    'occupation',
+    'relationship',
+    'race',
+    'gender',
+    'native-country',
+    'income'
 ]
 
 for col in categorical_cols:
@@ -27,12 +26,11 @@ for col in categorical_cols:
 # Numerical columns
 numerical_cols = [
     'age',
-    'balance',
-    'day',
-    'duration',
-    'campaign',
-    'pdays',
-    'previous'
+    'fnlwgt',
+    'educational-num',
+    'capital-gain',
+    'capital-loss',
+    'hours-per-week'
 ]
 
 for col in numerical_cols:
@@ -64,12 +62,12 @@ for col in categorical_cols:
         print(f"\n{col}:")
         print(copy[col].value_counts())
 
-# Display basic statistics for key numerical variables
-print("\nBasic statistics for key numerical variables:")
+# Display basic statistics for numerical variables
+print("\nBasic statistics for numerical variables:")
 available_numerical = [col for col in numerical_cols if col in copy.columns]
 if available_numerical:
     print(copy[available_numerical].describe())
 
-# Save cleaned data to feather format
-copy.to_feather('ty_banking_data.feather')
-print(f"\nData saved to 'bank_client_data_processed.feather'")
+# Save cleaned dataset to feather format
+copy.to_feather('ty_adult.income_data.feather')
+print("\nData saved to 'adult_dataset_processed.feather'")

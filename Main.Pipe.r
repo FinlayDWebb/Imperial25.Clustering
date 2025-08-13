@@ -174,23 +174,16 @@ impute_famd <- function(data, ncp = 10) {
   }
   
   tryCatch({
-    # Perform imputation
+    # Perform imputation - returns completed data without probability columns
     imp <- missMDA::imputeFAMD(data, ncp = ncp)$completeObs
     
-    # Convert back to original types
+    # Restore original factor levels
     for (col in names(data)) {
       if (!is.null(factor_levels[[col]])) {
-        # Convert probabilities to categories
-        prob_cols <- grep(paste0("^", col, "\\."), names(imp), value = TRUE)
-        if (length(prob_cols) > 0) {
-          probs <- as.matrix(imp[, prob_cols])
-          max_cat <- apply(probs, 1, which.max)
-          imp[[col]] <- factor_levels[[col]][max_cat]
-        }
-        # Ensure factor type
         imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
       }
     }
+    
     return(imp)
   }, error = function(e) {
     message("FAMD failed: ", e$message)
