@@ -1,22 +1,17 @@
 import pandas as pd
 
-# Read the CSV file (adjust filename & separator if needed)
-df = pd.read_csv('cleaned.adult.income.csv')
+# Read the CSV file (adjust filename as needed)
+df = pd.read_csv('weather.class_data.clean.csv')
 
 # Make a copy
 copy = df.copy()
 
 # Categorical columns
 categorical_cols = [
-    'workclass',
-    'education',
-    'marital-status',
-    'occupation',
-    'relationship',
-    'race',
-    'gender',
-    'native-country',
-    'income'
+    'Cloud Cover',
+    'Season',
+    'Location',
+    'Weather Type'  # target variable
 ]
 
 for col in categorical_cols:
@@ -25,12 +20,13 @@ for col in categorical_cols:
 
 # Numerical columns
 numerical_cols = [
-    'age',
-    'fnlwgt',
-    'educational-num',
-    'capital-gain',
-    'capital-loss',
-    'hours-per-week'
+    'Temperature',
+    'Humidity',
+    'Wind Speed',
+    'Precipitation (%)',
+    'Atmospheric Pressure',
+    'UV Index',
+    'Visibility (km)'
 ]
 
 for col in numerical_cols:
@@ -69,5 +65,5 @@ if available_numerical:
     print(copy[available_numerical].describe())
 
 # Save cleaned dataset to feather format
-copy.to_feather('ty_adult.income_data.feather')
-print("\nData saved to 'adult_dataset_processed.feather'")
+copy.to_feather('ty_weather_data.feather')
+print("\nData saved to 'weather_data_processed.feather'")
