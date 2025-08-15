@@ -149,6 +149,8 @@ evaluate_clustering_performance <- function(original_data_path,
                                            n_clusters = 3,
                                            output_file = "clustering_ari_results.feather") {
   cat("=== CLUSTERING EVALUATION ===\n")
+
+  cat("Evaluating with n_clusters =", n_clusters, "\n")
   
   # Step 5: Load and cluster original dataset
   cat("\nStep 5: Clustering original dataset...\n")
@@ -266,6 +268,7 @@ evaluate_clustering_performance <- function(original_data_path,
       cat("ERROR processing", imputed_file, ":", e$message, "\n")
       results <<- rbind(results, data.frame(
         File = basename(imputed_file),
+        NClusters = n_clusters,
         Method = method_name,
         MissingRate = missing_rate,
         ARI = NA,
@@ -274,7 +277,6 @@ evaluate_clustering_performance <- function(original_data_path,
         ImputedEntropy = NA,
         ImputedMutInfo = NA,
         ClusteringTimeSec = NA,
-        NClusters = n_clusters,
         NRows = NA,
         NCols = NA,
         stringsAsFactors = FALSE

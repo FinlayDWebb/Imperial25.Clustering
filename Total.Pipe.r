@@ -103,15 +103,21 @@ for (dataset in datasets) {
   cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
 
   # Generate file pattern for current dataset's imputed files
-  imputed_pattern <- file.path("imputed_datasets", 
+  all_clustering_results[[dataset_name]] <- list()
+  for (k in n_clusters) {
+    cat("\n>>> RUNNING CLUSTERING EVALUATION FOR", k, "CLUSTERS\n")
+    imputed_pattern <- file.path("imputed_datasets", 
                             paste0(dataset_name, "_*_imputed.feather"))
   
-  clustering_results <- evaluate_clustering_performance(
+    clustering_results <- evaluate_clustering_performance(
     original_data_path = dataset,
     imputed_files_pattern = imputed_pattern,
-    n_clusters = n_clusters,
-    output_file = file.path("clustering_results", paste0(dataset_name, "_clustering_results.feather"))
-  )
+    n_clusters = k,
+    output_file = file.path("clustering_results", 
+                           paste0(dataset_name, "_k", k, "_clustering_results.feather"))
+    )
+    all_clustering_results[[dataset_name]][[as.character(k)]] <- clustering_results
+  }
   
   # Store results
   all_clustering_results[[dataset_name]] <- clustering_results
