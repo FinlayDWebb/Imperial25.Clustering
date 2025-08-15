@@ -103,30 +103,26 @@ for (dataset in datasets) {
   cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
 
   # Generate file pattern for current dataset's imputed files
-  all_clustering_results[[dataset_name]] <- list()
+  clustering_results_list <- list()
   for (k in n_clusters) {
     cat("\n>>> RUNNING CLUSTERING EVALUATION FOR", k, "CLUSTERS\n")
     imputed_pattern <- file.path("imputed_datasets", 
                             paste0(dataset_name, "_*_imputed.feather"))
   
     clustering_results <- evaluate_clustering_performance(
-    original_data_path = dataset,
-    imputed_files_pattern = imputed_pattern,
-    n_clusters = k,
-    output_file = file.path("clustering_results", 
-                           paste0(dataset_name, "_k", k, "_clustering_results.feather"))
+      original_data_path = dataset,
+      imputed_files_pattern = imputed_pattern,
+      n_clusters = k,
     )
-    # Add cluster count metadata
-    if (!is.null(clustering_results)) {
-      clustering_results$NClusters <- k
-      all_clustering_results[[dataset_name]][[as.character(k)]] <- clustering_results
+
+      # Store with cluster count as key
+    clustering_results_list[[as.character(k)]] <- clustering_results
     }
+
   }
   
-  # Store results
-  all_clustering_results[[dataset_name]] <- clustering_results
-  cat("Clustering evaluation complete for", dataset, "\n")
-}
+  # Save nested results
+  all_clustering_results[[dataset_name]] <- clustering_results_list
 
 # ----------------------------
 # 3. RESULTS CONSOLIDATION
@@ -143,10 +139,13 @@ cat("Saved combined imputation results: combined_imputation_results.feather\n")
 # Combine all clustering results
 combined_clustering <- bind_rows(
   lapply(all_clustering_results, function(dataset_results) {
-    bind_rows(dataset_results, .id = "ClusterCount")
+    # Extract all results for this dataset
+    dataset_df <- bind_rows(dataset_results, .id = "NClusters")
+    return(dataset_df)
   }),
   .id = "Dataset"
 )
+
 arrow::write_feather(combined_clustering, "combined_clustering_results.feather")
 cat("Saved combined clustering results: combined_clustering_results.feather\n")
 
