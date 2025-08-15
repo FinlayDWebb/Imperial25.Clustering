@@ -250,6 +250,7 @@ evaluate_clustering_performance <- function(original_data_path,
 
       results <- rbind(results, data.frame(
         File = basename(imputed_file),
+        NClusters = n_clusters,
         Method = method_name,
         MissingRate = missing_rate,
         ARI = ari_score,
@@ -258,7 +259,6 @@ evaluate_clustering_performance <- function(original_data_path,
         ImputedEntropy = imputed_entropy,
         ImputedMutInfo = imputed_mutinfo,
         ClusteringTimeSec = clustering_time,
-        NClusters = n_clusters,
         NRows = nrow(imputed_data),
         NCols = ncol(imputed_data),
         stringsAsFactors = FALSE

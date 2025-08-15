@@ -116,7 +116,11 @@ for (dataset in datasets) {
     output_file = file.path("clustering_results", 
                            paste0(dataset_name, "_k", k, "_clustering_results.feather"))
     )
-    all_clustering_results[[dataset_name]][[as.character(k)]] <- clustering_results
+    # Add cluster count metadata
+    if (!is.null(clustering_results)) {
+      clustering_results$NClusters <- k
+      all_clustering_results[[dataset_name]][[as.character(k)]] <- clustering_results
+    }
   }
   
   # Store results
@@ -137,7 +141,12 @@ arrow::write_feather(combined_imputation, "combined_imputation_results.feather")
 cat("Saved combined imputation results: combined_imputation_results.feather\n")
 
 # Combine all clustering results
-combined_clustering <- bind_rows(all_clustering_results, .id = "Dataset")
+combined_clustering <- bind_rows(
+  lapply(all_clustering_results, function(dataset_results) {
+    bind_rows(dataset_results, .id = "ClusterCount")
+  }),
+  .id = "Dataset"
+)
 arrow::write_feather(combined_clustering, "combined_clustering_results.feather")
 cat("Saved combined clustering results: combined_clustering_results.feather\n")
 
