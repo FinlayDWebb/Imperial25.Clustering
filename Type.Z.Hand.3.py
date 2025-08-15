@@ -1,17 +1,16 @@
 import pandas as pd
 
 # Read the CSV file (adjust filename as needed)
-df = pd.read_csv('weather.class_data.clean.csv')
+df = pd.read_csv('6 class csv.csv')
 
 # Make a copy
 copy = df.copy()
 
 # Categorical columns
 categorical_cols = [
-    'Cloud Cover',
-    'Season',
-    'Location',
-    'Weather Type'  # target variable
+    'Star type',
+    'Star color',
+    'Spectral Class'
 ]
 
 for col in categorical_cols:
@@ -20,13 +19,10 @@ for col in categorical_cols:
 
 # Numerical columns
 numerical_cols = [
-    'Temperature',
-    'Humidity',
-    'Wind Speed',
-    'Precipitation (%)',
-    'Atmospheric Pressure',
-    'UV Index',
-    'Visibility (km)'
+    'Temperature (K)',
+    'Luminosity(L/Lo)',
+    'Radius(R/Ro)',
+    'Absolute magnitude(Mv)'
 ]
 
 for col in numerical_cols:
@@ -65,5 +61,5 @@ if available_numerical:
     print(copy[available_numerical].describe())
 
 # Save cleaned dataset to feather format
-copy.to_feather('ty_weather_data.feather')
-print("\nData saved to 'weather_data_processed.feather'")
+copy.to_feather('ty_stars_data.feather')
+print("\nData saved to 'star_data_cleaned.feather'")

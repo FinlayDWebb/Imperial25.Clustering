@@ -26,6 +26,16 @@ preprocess_data <- function(file_path) {
   return(as.data.frame(data))
 }
 
+# Use embedded types for column identification
+identify_column_types_embedded <- function(data) {
+  cat_cols <- names(data)[sapply(data, function(x) is.factor(x) || is.character(x))]
+  cont_cols <- names(data)[sapply(data, is.numeric)]
+  return(list(
+    categorical = cat_cols,
+    continuous = cont_cols
+  ))
+}
+
 # ----------------------------
 # 2. MAR MISSINGNESS INSERTION
 # ----------------------------
@@ -161,35 +171,43 @@ impute_mice <- function(data) {
   return(pooled_data)
 }
 
-impute_famd <- function(data, ncp = 10) {
+impute_famd <- function(data) {
   set.seed(42)
   
-  # Store original factor levels
-  factor_levels <- lapply(data, function(x) if(is.factor(x)) levels(x) else NULL)
-  
-  # Convert only character columns to factors
-  char_cols <- sapply(data, is.character)
-  if(any(char_cols)) {
-    data[char_cols] <- lapply(data[char_cols], as.factor)
+  # Identify categorical and continuous columns from Feather types
+  types <- identify_column_types_embedded(data)
+  cat_cols <- types$categorical
+  cont_cols <- types$continuous
+
+  # Convert categorical columns to factors if not already
+  if(length(cat_cols) > 0) {
+    data[cat_cols] <- lapply(data[cat_cols], function(x) if(!is.factor(x)) factor(x) else x)
   }
-  
+
+  # Store original factor levels
+  factor_levels <- lapply(data[cat_cols], levels)
+
+  # Estimate optimal ncp
+  message("Estimating optimal number of components for FAMD...")
+  ncp_est <- missMDA::estim_ncpFAMD(data)$ncp
+  message("Optimal ncp estimated: ", ncp_est)
+
   tryCatch({
-    # Perform imputation - returns completed data without probability columns
-    imp <- missMDA::imputeFAMD(data, ncp = ncp)$completeObs
-    
+    # Impute
+    imp <- missMDA::imputeFAMD(data, ncp = ncp_est, method = "Regularized")$completeObs
+
     # Restore original factor levels
-    for (col in names(data)) {
-      if (!is.null(factor_levels[[col]])) {
-        imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
-      }
+    for(col in cat_cols) {
+      imp[[col]] <- factor(imp[[col]], levels = factor_levels[[col]])
     }
-    
+
     return(imp)
   }, error = function(e) {
     message("FAMD failed: ", e$message)
     return(NULL)
   })
 }
+
 
 impute_missforest <- function(data) {
   #' Random forest-based imputation with simplified, robust handling
