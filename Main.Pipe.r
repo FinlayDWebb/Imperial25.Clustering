@@ -419,7 +419,9 @@ run_imputation_pipeline <- function(data_path,
       }
 
       # Save the imputed dataset to Feather
-      output_filename <- sprintf("%s_%s_%.2f_imputed.feather", base_name, tolower(method), rate)
+      output_filename <- file.path("imputed_datasets", 
+                            sprintf("%s_%s_%.2f_imputed.feather", 
+                                    base_name, tolower(method), rate))
       write_feather(imputed_data, output_filename)
       cat("Saved imputed data to:", output_filename, "\n")
       

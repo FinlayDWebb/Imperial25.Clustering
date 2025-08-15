@@ -282,8 +282,10 @@ evaluate_clustering_performance <- function(original_data_path,
     })
   }
   
-  arrow::write_feather(results, output_file)
-  cat(sprintf("\n=== RESULTS SAVED TO: %s ===\n", output_file))
+  # arrow::write_feather(results, output_file)
+  # cat(sprintf("\n=== RESULTS SAVED TO: %s ===\n", output_file))
+
+  cat(sprintf("\n=== CLUSTERING RESULTS COMPLETE FOR DATASET ===\n"))
   
   # Print summary
   cat("\n=== SUMMARY ===\n")

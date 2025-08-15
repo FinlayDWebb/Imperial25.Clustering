@@ -23,12 +23,15 @@ source("Cluster.Pipe.r")
 # 0. CREATE OUTPUT DIRECTORIES
 # ----------------------------
 
-# Create directories for organized output
 if (!dir.exists("imputation_results")) {
   dir.create("imputation_results")
 }
 if (!dir.exists("clustering_results")) {
   dir.create("clustering_results")
+}
+
+if (!dir.exists("imputed_datasets")) {
+  dir.create("imputed_datasets")
 }
 
 # ----------------------------
@@ -59,9 +62,9 @@ for (i in seq_along(datasets)) {
 }
 
 # Define parameters for the pipeline (unchanged)
-missing_rates <- c(0.05,0.10, 0.15)
+missing_rates <- c(0.05) # , 0.10, 0.15)
 methods <- c("MICE", "FAMD", "missForest")
-n_clusters <- 2  # Number of clusters for evaluation, stick with 2 for simplicity.
+n_clusters <- c(2, 3, 5)  # Number of clusters for evaluation, stick with 2 for simplicity.
 
 # ----------------------------
 # 2. PIPELINE EXECUTION
@@ -100,7 +103,8 @@ for (dataset in datasets) {
   cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
 
   # Generate file pattern for current dataset's imputed files
-  imputed_pattern <- paste0(dataset_name, "_*_imputed.feather")
+  imputed_pattern <- file.path("imputed_datasets", 
+                            paste0(dataset_name, "_*_imputed.feather"))
   
   clustering_results <- evaluate_clustering_performance(
     original_data_path = dataset,

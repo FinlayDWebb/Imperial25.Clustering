@@ -1,16 +1,20 @@
 import pandas as pd
 
-# Read the CSV file (adjust filename as needed)
-df = pd.read_csv('6 class csv.csv')
+# Load the dataset
+df = pd.read_csv('StressLevelDataset.csv')
 
 # Make a copy
 copy = df.copy()
 
-# Categorical columns
+# Categorical columns (if any categorical columns exist, add them here)
 categorical_cols = [
-    'Star type',
-    'Star color',
-    'Spectral Class'
+    # You can include columns like 'mental_health_history', 'bullying', etc. if they are categorical
+    'mental_health_history', 
+    'teacher_student_relationship', 
+    'social_support',
+    'peer_pressure',
+    'extracurricular_activities',
+    'bullying'
 ]
 
 for col in categorical_cols:
@@ -19,10 +23,21 @@ for col in categorical_cols:
 
 # Numerical columns
 numerical_cols = [
-    'Temperature (K)',
-    'Luminosity(L/Lo)',
-    'Radius(R/Ro)',
-    'Absolute magnitude(Mv)'
+    'anxiety_level',
+    'self_esteem',
+    'depression',
+    'headache',
+    'blood_pressure',
+    'sleep_quality',
+    'breathing_problem',
+    'noise_level',
+    'living_conditions',
+    'safety',
+    'basic_needs',
+    'academic_performance',
+    'study_load',
+    'future_career_concerns',
+    'stress_level'
 ]
 
 for col in numerical_cols:
@@ -60,6 +75,9 @@ available_numerical = [col for col in numerical_cols if col in copy.columns]
 if available_numerical:
     print(copy[available_numerical].describe())
 
-# Save cleaned dataset to feather format
-copy.to_feather('ty_stars_data.feather')
-print("\nData saved to 'star_data_cleaned.feather'")
+# Save cleaned dataset to feather format for faster future loading
+copy.to_feather('ty_stress_data.feather')
+
+print("\nData saved as:")
+print(" - 'mental_health_data_cleaned.feather'")
+print(" - 'mental_health_data_cleaned.csv'")
