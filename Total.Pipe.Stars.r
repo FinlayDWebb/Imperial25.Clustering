@@ -39,7 +39,7 @@ if (!dir.exists("imputed_datasets")) {
 # ----------------------------
 
 # Get all Feather files from the Processed.Data folder
-data_folder <- "Processed.Data"
+data_folder <- "Processed.Data.Stars"
 
 if (!dir.exists(data_folder)) {
   stop("Error: 'Processed.Data' folder not found in current directory!")
