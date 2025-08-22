@@ -70,10 +70,6 @@ n_clusters <- c(2, 3, 5)  # Number of clusters for evaluation, stick with 2 for 
 # 2. PIPELINE EXECUTION
 # ----------------------------
 
-# Initialize results storage
-all_imputation_results <- list()
-all_clustering_results <- list()
-
 for (dataset in datasets) {
   dataset_name <- file_path_sans_ext(basename(dataset))
 
@@ -94,7 +90,6 @@ for (dataset in datasets) {
   # Save and store results in imputation_results folder
   imputation_file <- file.path("imputation_results", paste0(dataset_name, "_imputation_results.feather"))
   arrow::write_feather(imputation_results, imputation_file)
-  all_imputation_results[[dataset_name]] <- imputation_results
   cat("Saved imputation results to:", imputation_file, "\n")
   
   # ----------------------------
@@ -120,37 +115,10 @@ for (dataset in datasets) {
     }
 
   }
-  
-  # Save nested results
-  all_clustering_results[[dataset_name]] <- clustering_results_list
+
 
 # ----------------------------
-# 3. RESULTS CONSOLIDATION
-# ----------------------------
-cat("\n\n", rep("=", 60), "\n", sep="")
-cat("CONSOLIDATING FINAL RESULTS\n")
-cat(rep("=", 60), "\n\n", sep="")
-
-# Combine all imputation results
-combined_imputation <- bind_rows(all_imputation_results, .id = "Dataset")
-arrow::write_feather(combined_imputation, "combined_imputation_results.feather")
-cat("Saved combined imputation results: combined_imputation_results.feather\n")
-
-# Combine all clustering results
-combined_clustering <- bind_rows(
-  lapply(all_clustering_results, function(dataset_results) {
-    # Extract all results for this dataset
-    dataset_df <- bind_rows(dataset_results, .id = "NClusters")
-    return(dataset_df)
-  }),
-  .id = "Dataset"
-)
-
-arrow::write_feather(combined_clustering, "combined_clustering_results.feather")
-cat("Saved combined clustering results: combined_clustering_results.feather\n")
-
-# ----------------------------
-# 4. FINAL REPORT
+# 3. FINAL REPORT
 # ----------------------------
 cat("\n\n", rep("=", 60), "\n", sep="")
 cat("PIPELINE EXECUTION COMPLETE\n")
