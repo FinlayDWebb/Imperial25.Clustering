@@ -2,11 +2,10 @@
 # =============================================
 # MASTER PIPELINE SCRIPT (REVISED)
 # =============================================
-# Coordinates the entire workflow:
-# 1. Iterates through multiple datasets
+# Coordinates the entire workflow for a single dataset:
+# 1. Processes one specific dataset
 # 2. Runs imputation pipeline (Main.Pipe.r)
 # 3. Runs clustering evaluation (Cluster.Pipe.r)
-# 4. Consolidates all results
 # =============================================
 
 # Load required libraries
@@ -38,85 +37,73 @@ if (!dir.exists("imputed_datasets")) {
 # 1. DATASET CONFIGURATION
 # ----------------------------
 
-# Get all Feather files from the Processed.Data folder
-data_folder <- "Processed.Data.Manila"
+# Specify the exact dataset to process
+dataset <- "Processed.Data/ty_manila.flood_data.feather"
 
-if (!dir.exists(data_folder)) {
-  stop("Error: 'Processed.Data' folder not found in current directory!")
+# Verify the dataset exists
+if (!file.exists(dataset)) {
+  stop("Error: Dataset file not found: ", dataset)
 }
 
-datasets <- list.files(
-  path = data_folder,
-  pattern = "\\.feather$",
-  full.names = TRUE,
-  ignore.case = TRUE
-)
+dataset_name <- file_path_sans_ext(basename(dataset))
 
-if (length(datasets) == 0) {
-  stop("Error: No Feather files found in 'Processed.Data' folder!")
-}
+cat("Processing dataset:", dataset, "\n")
 
-cat("Found", length(datasets), "Feather files in", data_folder, ":\n")
-for (i in seq_along(datasets)) {
-  cat(sprintf("  %d. %s\n", i, basename(datasets[i])))
-}
-
-# Define parameters for the pipeline (unchanged)
+# Define parameters for the pipeline
 missing_rates <- c(0.05) # , 0.10, 0.15)
 methods <- c("MICE", "FAMD", "missForest")
-n_clusters <- c(2, 3, 5)  # Number of clusters for evaluation, stick with 2 for simplicity.
+n_clusters <- c(2, 3, 5)  # Number of clusters for evaluation
 
 # ----------------------------
 # 2. PIPELINE EXECUTION
 # ----------------------------
 
-for (dataset in datasets) {
-  dataset_name <- file_path_sans_ext(basename(dataset))
+cat("\n\n", rep("=", 60), "\n", sep="")
+cat("STARTING PIPELINE FOR DATASET:", dataset, "\n")
+cat(rep("=", 60), "\n\n", sep="")
 
-  cat("\n\n", rep("=", 60), "\n", sep="")
-  cat("STARTING PIPELINE FOR DATASET:", dataset, "\n")
-  cat(rep("=", 60), "\n\n", sep="")
+# ----------------------------
+# A. RUN IMPUTATION PIPELINE
+# ----------------------------
+cat(">>> RUNNING IMPUTATION PIPELINE\n")
+imputation_results <- run_imputation_pipeline(
+  data_path = dataset,
+  missing_rates = missing_rates,
+  methods = methods
+)
+
+# Save results in imputation_results folder
+imputation_file <- file.path("imputation_results", paste0(dataset_name, "_imputation_results.feather"))
+arrow::write_feather(imputation_results, imputation_file)
+cat("Saved imputation results to:", imputation_file, "\n")
+
+# ----------------------------
+# B. RUN CLUSTERING EVALUATION
+# ----------------------------
+cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
+
+# Generate file pattern for current dataset's imputed files
+clustering_results_list <- list()
+for (k in n_clusters) {
+  cat("\n>>> RUNNING CLUSTERING EVALUATION FOR", k, "CLUSTERS\n")
+  imputed_pattern <- file.path("imputed_datasets", 
+                          paste0(dataset_name, "_*_imputed.feather"))
   
-  # ----------------------------
-  # A. RUN IMPUTATION PIPELINE
-  # ----------------------------
-  cat(">>> RUNNING IMPUTATION PIPELINE\n")
-  imputation_results <- run_imputation_pipeline(
-    data_path = dataset,
-    missing_rates = missing_rates,
-    methods = methods
+  clustering_results <- evaluate_clustering_performance(
+    original_data_path = dataset,
+    imputed_files_pattern = imputed_pattern,
+    n_clusters = k,
   )
-
-  # Save and store results in imputation_results folder
-  imputation_file <- file.path("imputation_results", paste0(dataset_name, "_imputation_results.feather"))
-  arrow::write_feather(imputation_results, imputation_file)
-  cat("Saved imputation results to:", imputation_file, "\n")
   
-  # ----------------------------
-  # B. RUN CLUSTERING EVALUATION
-  # ----------------------------
-  cat("\n>>> RUNNING CLUSTERING EVALUATION\n")
-
-  # Generate file pattern for current dataset's imputed files
-  clustering_results_list <- list()
-  for (k in n_clusters) {
-    cat("\n>>> RUNNING CLUSTERING EVALUATION FOR", k, "CLUSTERS\n")
-    imputed_pattern <- file.path("imputed_datasets", 
-                            paste0(dataset_name, "_*_imputed.feather"))
+  # Save clustering results to clustering_results folder
+  clustering_file <- file.path("clustering_results", 
+                               paste0(dataset_name, "_clustering_", k, "_results.feather"))
+  arrow::write_feather(clustering_results, clustering_file)
+  cat("Saved clustering results to:", clustering_file, "\n")
   
-    clustering_results <- evaluate_clustering_performance(
-      original_data_path = dataset,
-      imputed_files_pattern = imputed_pattern,
-      n_clusters = k,
-    )
-
-      # Store with cluster count as key
-    clustering_results_list[[as.character(k)]] <- clustering_results
-    }
-
-  }
-
-
+  # Store with cluster count as key
+  clustering_results_list[[as.character(k)]] <- clustering_results
+}
 
 # ----------------------------
 # 3. FINAL REPORT
@@ -125,13 +112,12 @@ cat("\n\n", rep("=", 60), "\n", sep="")
 cat("PIPELINE EXECUTION COMPLETE\n")
 cat(rep("=", 60), "\n\n", sep="")
 
-cat("Processed", length(datasets), "datasets:\n")
-cat(paste("-", datasets), sep = "\n")
+cat("Processed dataset:", dataset, "\n")
 
 cat("\nSummary of results files:\n")
-cat("- Imputation results for each dataset: imputation_results/[dataset]_imputation_results.feather\n")
-cat("- Clustering results for each dataset: clustering_results/[dataset]_clustering_results.feather\n")
-cat("- Combined imputation results: combined_imputation_results.feather\n")
-cat("- Combined clustering results: combined_clustering_results.feather\n")
+cat("- Imputation results: imputation_results/", dataset_name, "_imputation_results.feather\n", sep="")
+for (k in n_clusters) {
+  cat("- Clustering results (", k, " clusters): clustering_results/", dataset_name, "_clustering_", k, "_results.feather\n", sep="")
+}
 
 cat("\n=== TOTAL PIPELINE EXECUTION COMPLETE ===\n")

@@ -38,7 +38,7 @@ if (!dir.exists("imputed_datasets")) {
 # ----------------------------
 
 # Specify the exact dataset to process
-dataset <- "Processed.Data/ty_wine.red_data.feather"
+dataset <- "Processed.Data/ty_hypertension_data.feather"
 
 # Verify the dataset exists
 if (!file.exists(dataset)) {
