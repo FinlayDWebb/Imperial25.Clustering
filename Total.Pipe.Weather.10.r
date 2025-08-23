@@ -38,7 +38,7 @@ if (!dir.exists("imputed_datasets")) {
 # ----------------------------
 
 # Specify the exact dataset to process
-dataset <- "Processed.Data/ty_wine.red_data.feather"
+dataset <- "Processed.Data/ty_weather_data.feather"
 
 # Verify the dataset exists
 if (!file.exists(dataset)) {
@@ -50,7 +50,7 @@ dataset_name <- file_path_sans_ext(basename(dataset))
 cat("Processing dataset:", dataset, "\n")
 
 # Define parameters for the pipeline
-missing_rates <- c(0.05) # , 0.10, 0.15)
+missing_rates <- c(0.10) # , 0.10, 0.15)
 methods <- c("MICE", "FAMD", "missForest")
 n_clusters <- c(2, 3, 5)  # Number of clusters for evaluation
 
@@ -61,6 +61,7 @@ n_clusters <- c(2, 3, 5)  # Number of clusters for evaluation
 cat("\n\n", rep("=", 60), "\n", sep="")
 cat("STARTING PIPELINE FOR DATASET:", dataset, "\n")
 cat(rep("=", 60), "\n\n", sep="")
+
 
 # ----------------------------
 # A. RUN IMPUTATION PIPELINE
@@ -73,7 +74,8 @@ imputation_results <- run_imputation_pipeline(
 )
 
 # Save results in imputation_results folder
-imputation_file <- file.path("imputation_results", paste0(dataset_name, "_imputation_results.feather"))
+imputation_file <- file.path("imputation_results", 
+                                paste0(dataset_name, "_", missing_rates[1], "_imputation_results.feather"))
 arrow::write_feather(imputation_results, imputation_file)
 cat("Saved imputation results to:", imputation_file, "\n")
 
@@ -97,7 +99,7 @@ for (k in n_clusters) {
   
   # Save clustering results to clustering_results folder
   clustering_file <- file.path("clustering_results", 
-                               paste0(dataset_name, "_clustering_", k, "_results.feather"))
+                               paste0(dataset_name, "_", missing_rates[1], "_clustering_", k, "_results.feather"))
   arrow::write_feather(clustering_results, clustering_file)
   cat("Saved clustering results to:", clustering_file, "\n")
   
