@@ -89,7 +89,7 @@ clustering_results_list <- list()
 for (k in n_clusters) {
   cat("\n>>> RUNNING CLUSTERING EVALUATION FOR", k, "CLUSTERS\n")
   imputed_pattern <- file.path("imputed_datasets", 
-                          paste0(dataset_name, "_*_", missing_rates[1], "_imputed.feather"))
+                          paste0(dataset_name, "_*_", sprintf("%.2f", missing_rates[1]), "_imputed.feather"))
   
   clustering_results <- evaluate_clustering_performance(
     original_data_path = dataset,
