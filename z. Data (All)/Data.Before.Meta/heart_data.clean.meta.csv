@@ -1,0 +1,15 @@
+variable,type,levels,description,source
+age,numeric,,Age in years,UCI  
+sex,categorical,"0, 1","Sex (0=female, 1=male)",UCI  
+cp,categorical,"1, 2, 3, 4","Chest pain type (1=typical angina, 4=asymptomatic)",UCI 
+trestbps,numeric,,Resting blood pressure (mm Hg),UCI  
+chol,numeric,,Serum cholesterol (mg/dl),UCI  
+fbs,binary,"0, 1","Fasting blood sugar > 120 mg/dl",UCI  
+restecg,categorical,"0, 1, 2","Resting electrocardiographic results",UCI  
+thalach,numeric,,Maximum heart rate achieved,UCI  
+exang,binary,"0, 1","Exercise induced angina",UCI  
+oldpeak,numeric,,ST depression induced by exercise,UCI  
+slope,categorical,"1, 2, 3","Slope of peak exercise ST segment",UCI  
+ca,numeric,"0, 1, 2, 3","Number of major vessels colored by fluoroscopy",UCI  
+thal,categorical,"3, 6, 7","Thalassemia type (3=normal, 6=fixed defect, 7=reversible defect)",UCI  
+target,categorical,"0, 1, 2, 3, 4","Diagnosis of heart disease (target)",UCI  

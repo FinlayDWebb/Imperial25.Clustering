@@ -1,0 +1,16 @@
+variable,type,levels,description,source
+age,numeric,,Age of person,UCI
+workclass,categories,"Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked",The workclass,UCI
+fnlwgt,numeric,,Weighting of representation,UCI
+education,ordered,"Preschool, 1st-4th, 5th-6th, 7th-8th, 9th, 10th, 11th, 12th, HS-grad, Some-college, Assoc-voc, Assoc-acdm, Bachelors,Prof-school, Masters, Doctorate",Level of education,UCI
+education-num,numeric,,Level of education,UCI
+marital-status,categories,"Married-civ-spouse, Divorced, Never-married, Separated, Widowed, Married-spouse-absent, Married-AF-spouse",Marital status,UCI
+occupation,categories,"Tech-support, Craft-repair, Other-service, Sales, Exec-managerial, Prof-specialty, Handlers-cleaners, Machine-op-inspct, Adm-clerical, Farming-fishing, Transport-moving, Priv-house-serv, Protective-serv, Armed-Forces",Occupation,UCI
+relationship,categories,"Wife, Own-child, Husband, Not-in-family, Other-relative, Unmarried",Relationship,UCI
+race,categories,"White, Asian-Pac-Islander, Amer-Indian-Eskimo, Other, Black",Race,UCI
+sex,binary,"Female, Male",Sex,UCI
+capital-gain,numeric,,Capital Gain,UCI
+capital-loss,numeric,,Capital Loss,UCI
+hours-per-week,numeric,,Hours per week,UCI
+native-country,categories,"United-States, Cambodia, England, Puerto-Rico, Canada, Germany, Outlying-US(Guam-USVI-etc), India, Japan, Greece, South, China, Cuba, Iran, Honduras, Philippines, Italy, Poland, Jamaica, Vietnam, Mexico, Portugal, Ireland, France, Dominican-Republic, Laos, Ecuador, Taiwan, Haiti, Columbia, Hungary, Guatemala, Nicaragua, Scotland, Thailand, Yugoslavia, El-Salvador, Trinadad&Tobago, Peru, Hong, Holand-Netherlands",Native Country,UCI
+income-greater-than-50k,binary,"1, 0",Income,UCI
