@@ -1,7 +1,0 @@
-variable,type,levels,description,source
-Age,numeric,,Age in years,Kaggle  
-SystolicBP,numeric,,Systolic blood pressure (mmHg),Kaggle  
-DiastolicBP,numeric,,Diastolic blood pressure (mmHg),Kaggle  
-BS,numeric,,Blood glucose level (mmol/L),Kaggle  
-HeartRate,numeric,,Heart rate (bpm),Kaggle  
-RiskLevel,ordered,"low risk, mid risk, high risk","Risk level during pregnancy (target)",Kaggle
