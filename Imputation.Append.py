@@ -5,6 +5,7 @@ import glob
 def calculate_best_methods(df, dataset_name):
     """
     Calculate the best performing method for each MissingRate category and overall.
+    Uses tiebreaker logic: composite score -> RMSE -> PFC -> alphabetical order.
     
     Args:
         df (pandas DataFrame): Input data
@@ -29,30 +30,8 @@ def calculate_best_methods(df, dataset_name):
             'PFC': 'mean'
         }).reset_index()
         
-        # Normalize RMSE (lower is better, so we use 1 - normalized)
-        max_rmse = method_stats['RMSE'].max()
-        min_rmse = method_stats['RMSE'].min()
-        # Handle case where all RMSE values are the same
-        if max_rmse == min_rmse:
-            method_stats['Normalized_RMSE'] = 1.0
-        else:
-            method_stats['Normalized_RMSE'] = 1 - ((method_stats['RMSE'] - min_rmse) / (max_rmse - min_rmse))
-        
-        # Normalize PFC (lower is better, so we use 1 - normalized)
-        max_pfc = method_stats['PFC'].max()
-        min_pfc = method_stats['PFC'].min()
-        # Handle case where all PFC values are the same
-        if max_pfc == min_pfc:
-            method_stats['Normalized_PFC'] = 1.0
-        else:
-            method_stats['Normalized_PFC'] = 1 - ((method_stats['PFC'] - min_pfc) / (max_pfc - min_pfc))
-        
-        # Calculate final score as average of normalized scores
-        method_stats['Final_Score'] = (method_stats['Normalized_RMSE'] + method_stats['Normalized_PFC']) / 2
-        
-        # Find the winner for this missing rate
-        winner_idx = method_stats['Final_Score'].idxmax()
-        winner = method_stats.loc[winner_idx]
+        # Find winner using tiebreaker logic
+        winner = find_winner_with_tiebreakers(method_stats)
         
         results.append({
             'Dataset': dataset_name,
@@ -70,28 +49,8 @@ def calculate_best_methods(df, dataset_name):
         'PFC': 'mean'
     }).reset_index()
     
-    # Normalize RMSE for overall
-    max_rmse = method_stats_overall['RMSE'].max()
-    min_rmse = method_stats_overall['RMSE'].min()
-    if max_rmse == min_rmse:
-        method_stats_overall['Normalized_RMSE'] = 1.0
-    else:
-        method_stats_overall['Normalized_RMSE'] = 1 - ((method_stats_overall['RMSE'] - min_rmse) / (max_rmse - min_rmse))
-    
-    # Normalize PFC for overall
-    max_pfc = method_stats_overall['PFC'].max()
-    min_pfc = method_stats_overall['PFC'].min()
-    if max_pfc == min_pfc:
-        method_stats_overall['Normalized_PFC'] = 1.0
-    else:
-        method_stats_overall['Normalized_PFC'] = 1 - ((method_stats_overall['PFC'] - min_pfc) / (max_pfc - min_pfc))
-    
-    # Calculate final score for overall
-    method_stats_overall['Final_Score'] = (method_stats_overall['Normalized_RMSE'] + method_stats_overall['Normalized_PFC']) / 2
-    
-    # Find the overall winner
-    winner_idx = method_stats_overall['Final_Score'].idxmax()
-    winner = method_stats_overall.loc[winner_idx]
+    # Find overall winner using tiebreaker logic
+    winner = find_winner_with_tiebreakers(method_stats_overall)
     
     results.append({
         'Dataset': dataset_name,
@@ -104,6 +63,61 @@ def calculate_best_methods(df, dataset_name):
     })
     
     return results
+
+def find_winner_with_tiebreakers(method_stats):
+    """
+    Find the winner using the specified tiebreaker logic.
+    
+    Primary: Lowest composite score (normalized RMSE + normalized PFC)
+    Tiebreaker 1: If tied on composite score → lowest RMSE wins
+    Tiebreaker 2: If still tied → lowest PFC wins
+    Tiebreaker 3: If still tied → alphabetical order by method name
+    
+    Args:
+        method_stats (pandas DataFrame): DataFrame with Method, RMSE, and PFC columns
+    
+    Returns:
+        pandas Series: Winner row with Final_Score added
+    """
+    # Normalize RMSE (lower is better, so we use 1 - normalized)
+    max_rmse = method_stats['RMSE'].max()
+    min_rmse = method_stats['RMSE'].min()
+    # Handle case where all RMSE values are the same
+    if max_rmse == min_rmse:
+        method_stats['Normalized_RMSE'] = 1.0
+    else:
+        method_stats['Normalized_RMSE'] = 1 - ((method_stats['RMSE'] - min_rmse) / (max_rmse - min_rmse))
+    
+    # Normalize PFC (lower is better, so we use 1 - normalized)
+    max_pfc = method_stats['PFC'].max()
+    min_pfc = method_stats['PFC'].min()
+    # Handle case where all PFC values are the same
+    if max_pfc == min_pfc:
+        method_stats['Normalized_PFC'] = 1.0
+    else:
+        method_stats['Normalized_PFC'] = 1 - ((method_stats['PFC'] - min_pfc) / (max_pfc - min_pfc))
+    
+    # Calculate composite score (lower normalized scores mean better performance)
+    # Since we want the LOWEST composite score, we'll work with the raw composite
+    method_stats['Composite_Score'] = (2 - method_stats['Normalized_RMSE'] - method_stats['Normalized_PFC'])
+    
+    # For final score display purposes, we'll keep the original logic (higher is better)
+    method_stats['Final_Score'] = (method_stats['Normalized_RMSE'] + method_stats['Normalized_PFC']) / 2
+    
+    # Apply tiebreaker logic
+    # Sort by: 1) Composite_Score (ascending - lowest wins)
+    #         2) RMSE (ascending - lowest wins)
+    #         3) PFC (ascending - lowest wins)
+    #         4) Method name (ascending - alphabetical order)
+    sorted_methods = method_stats.sort_values([
+        'Composite_Score',  # Primary: lowest composite score
+        'RMSE',            # Tiebreaker 1: lowest RMSE
+        'PFC',             # Tiebreaker 2: lowest PFC
+        'Method'           # Tiebreaker 3: alphabetical order
+    ], ascending=[True, True, True, True])
+    
+    # Return the winner (first row after sorting)
+    return sorted_methods.iloc[0]
 
 def process_datasets(folder_path):
     """
